@@ -1,0 +1,45 @@
+# Build artifacts
+*.ino.d
+*.ino.bin
+*.ino.elf
+*.ino.map
+*.o
+*.a
+*.so
+*.pyc
+__pycache__/
+*.pyo
+*.pyd
+.venv/
+venv/
+env/
+*.egg-info/
+dist/
+build/
+*.ipk
+*.zip
+*.7z
+*.tar.gz
+*.bin
+*.elf
+*.hex
+*.uf2
+*.eep
+*.elf.lst
+# OS files
+.DS_Store
+Thumbs.db
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+# Local config
+.env
+.env.local
+# Memory bank backups
+memory-bank/*.bak
+# Test artifacts
+test-results/
+*.log

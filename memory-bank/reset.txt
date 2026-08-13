@@ -1,0 +1,240 @@
+How to Fix
+Option 1: Restart Kilo from the correct folder (Recommended)
+Close the current Kilo session completely
+Open a new terminal/PowerShell window
+Navigate to the project folder:
+cd D:\kilocode\icsdecoder
+Start Kilo from there:
+kilocode
+Or however you normally launch it — the key is that the working directory must be a real Windows path, not / or the VS Code install folder.
+Option 2: Fix VS Code Workspace Settings
+If you're launching Kilo from VS Code:
+
+In VS Code, go to File → Open Folder...
+Select D:\kilocode\icsdecoder
+Restart the Kilo session from that workspace
+Option 3: Check for a .kilo workspace override
+Run this in PowerShell to see if there's a Kilo workspace config overriding the global permissions:
+
+Get-ChildItem -Path "D:\Users\Owner\AppData\Local\Programs\Microsoft VS Code" -Filter ".kilo" -Recurse -Directory -ErrorAction SilentlyContinue | Select-Object FullName
+Get-ChildItem -Path "D:\" -Filter ".kilo" -Recurse -Directory -ErrorAction SilentlyContinue | Select-Object FullName
+If any .kilo folder exists above your project, it may be overriding permissions.
+
+Memory Bank Content (Save This)
+Since I cannot create files in this session, here is everything you need. Copy each block into its corresponding file once the permissions are fixed.
+
+File 1: D:\kilocode\icsdecoder\README.md
+# ICS Decoder for iCopy-X
+
+Firmware to emulate the official iCS Decoder for the iCopy-X RFID device.
+
+## Hardware
+- HD RP10 125kHz RFID Reader
+- Teyleten Robot Type-C Pro Micro ATmega32U4 5V 16MHz (Amazon B0B6HYLC44)
+- USB-C connection to iCopy-X
+
+## Protocol
+The firmware implements a serial-over-USB protocol:
+- Discovery: Responds "ISE\r\n" to "Who\r\n"
+- Read: Responds "OK\r\n" + card payload to "RD\r\n", or "??\r\n" on no card
+
+## Development
+- Source: `firmware/`
+- Documentation: `memory-bank/`
+File 2: D:\kilocode\icsdecoder\memory-bank\README.md
+# ICS Decoder Project Memory Bank
+
+This directory tracks the progress, decisions, and research for the ICS Decoder project for the iCopy-X RFID device.
+
+## Directory Structure
+
+- `research/` - Background research, datasheets, and protocol specs
+- `decisions/` - Key technical decisions and rationale
+- `progress/` - Step-by-step implementation progress logs
+
+## Usage
+
+Each step of the project is documented here. If a crash or context loss occurs, this memory bank allows recovery.
+File 3: D:\kilocode\icsdecoder\memory-bank\decisions\hardware-selection.md
+# Hardware Selection Decision
+
+Date: 2026-08-12
+
+## Context
+- Target Device: iCopy-X (lab-401/icopy-x open firmware)
+- RFID Reader: HD RP10 (125kHz Wiegand output)
+- Requirement: Serial-over-USB interface responding to "Who" and "RD" commands
+
+## Decision
+Arduino Nano (ATmega328P) is **NOT suitable** due to lack of native USB CDC.
+Selected: Teyleten Robot Type-C Pro Micro ATmega32U4 5V 16MHz (Amazon B0B6HYLC44)
+
+## Rationale
+- iCopy-X requires USB enumeration as a CDC serial device
+- ATmega328P relies on external USB-UART bridge (CH340/FTDI) which cannot act as a USB device
+- ATmega32U4 has native USB support for CDC
+- 5V native operation matches RP10 Wiegand logic levels — no level shifter needed
+- USB-C onboard matches iCopy-X host port
+- ~$6/board (3-pack $17.99), very cost-effective
+File 4: D:\kilocode\icsdecoder\memory-bank\decisions\board-selection.md
+# Development Board Selection - ATmega32U4 Pro Micro (Type-C)
+
+Date: 2026-08-12
+
+## Decision
+Use Teyleten Robot Type-C Pro Micro ATmega32U4 5V 16MHz (Amazon B0B6HYLC44) as development platform.
+
+## Rationale
+- 5V native operation: no level shifter needed for RP10 Wiegand
+- USB-C onboard: direct match for iCopy-X host port
+- Native USB CDC for iCopy-X accessory enumeration
+- Hardware interrupts on pins 2/3 for Wiegand
+- Mature Arduino ecosystem, proven in access control
+- ~$6/board (3-pack $17.99), very cost-effective
+
+## Notes
+- Product listing has contradictory description text mentioning micro-USB for programming — title and feature bullets confirm Type-C
+- Clone quality varies — verify genuine ATmega32U4 chip on arrival
+File 5: D:\kilocode\icsdecoder\memory-bank\progress\step-001-project-initialization.md
+# Step 001: Project Initialization
+
+Date: 2026-08-12
+
+## Completed
+- Created project folder structure at D:\kilocode\icsdecoder
+- Set up memory-bank with research, decisions, and progress subdirectories
+- Reviewed project requirements and base code from lab-401/icopy-x
+- Researched iCopy-X accessory protocol (unverified from public sources)
+- Validated hardware options: Arduino Nano rejected, ATmega32U4 Pro Micro selected
+- Confirmed RP10 Wiegand reader specifications and wiring requirements
+
+## Next Steps
+- Validate suggested Arduino protocol code
+- Set up firmware source directory
+- Acquire hardware: Teyleten Robot Pro Micro 3pcs + HD RP10 reader
+- Build test harness and verify Wiegand decoding
+- Capture protocol with real iCopy-X + iCS Decoder pair
+File 6: D:\kilocode\icsdecoder\memory-bank\research\icopy-x-ics-decoder-architecture.md
+# iCS Decoder Hardware Architecture Research
+
+Date: 2026-08-12
+
+## Source
+Amazon product B0B6HYLC44 (Teyleten Robot Type-C Pro Micro ATmega32U4) — used as reference platform.
+
+## Findings
+- Commercial iCS Decoder is a Wiegand-to-USB-C bridge dongle
+- MCU likely uses ATmega32U4 or similar with native USB, or USB-to-UART bridge + simple MCU
+- No security/decryption on the bridge — iCopy-X host handles all processing
+- Power: 5V from USB-C VBUS, LDO regulation, ESD protection
+- RP10 reader draws ~75mA standby, 100mA peak
+
+## Implications for Clone
+- ATmega32U4 Pro Micro is viable replacement
+- 5V logic matches RP10 Wiegand directly — no level shifting needed
+- Protocol verification still required before firmware implementation
+File 7: D:\kilocode\icsdecoder\memory-bank\research\protocol-specification.md
+# iCS Decoder Protocol Specification (UNVERIFIED)
+
+Date: 2026-08-12
+
+## Status
+⚠️  This protocol is based on reverse-engineered notes and has NOT been verified against public sources.
+
+## Discovery
+- Host sends: "Who\r\n"
+- Device responds: "ISE\r\n"
+
+## Read Command
+- Host sends: "RD\r\n"
+- Device responds with either:
+  - "OK\r\n" followed by card payload block
+  - "??\r\n" if no badge present or error
+
+## Card Payload Format
+$A_CARD_START$
+wiedata#:11100101100110111001000001
+Bit#:26
+FC#:203
+ID#:14112
+Hex#:2007966e41
+Blk7#:0000000007966e41
+Bits#:00000010000000000111100101100110111001000001
+$A_CARD_STOP$
+
+## Notes
+- Exact protocol is proprietary and closed-source
+- No public documentation exists from Lab401 or iCopy-X manufacturer
+- Must be validated with USB protocol capture of genuine iCopy-X + iCS Decoder pair
+File 8: D:\kilocode\icsdecoder\PROJECT-PLAN.md
+# ICS Decoder Project Plan
+
+## Current Status
+- Project folder created at D:\kilocode\icsdecoder
+- Memory-bank structure established
+- Hardware selected: Teyleten Robot Type-C Pro Micro ATmega32U4 5V 16MHz
+- Protocol identified but unverified
+
+## Phase 1: Hardware Acquisition & Test Setup (Week 1)
+- [ ] Purchase Teyleten Robot Type-C Pro Micro 3pcs (B0B6HYLC44)
+- [ ] Purchase HD RP10 125kHz RFID reader
+- [ ] Gather USB-C cables, Dupont wires, breadboard
+- [ ] Wire RP10 to Pro Micro:
+  - RP10 Red → VCC
+  - RP10 Black → GND
+  - RP10 Green → Pin 2 (D0, INT0)
+  - RP10 White → Pin 3 (D1, INT1)
+
+## Phase 2: Wiegand Sniffer (Week 1-2)
+- [ ] Write Arduino sketch to capture Wiegand bits via interrupts
+- [ ] Test with 26-bit Wiegand card
+- [ ] Verify bit timing (25ms timeout)
+- [ ] Validate FC/ID extraction from raw bits
+- [ ] Document Wiegand format supported by RP10
+
+## Phase 3: Protocol Implementation (Week 2-3)
+- [ ] Implement "Who" → "ISE" handshake
+- [ ] Implement "RD" command handler
+- [ ] Implement card payload formatting ($A_CARD_START$ block)
+- [ ] Handle "no card" case with "??\r\n"
+- [ ] Test with Serial Monitor / terminal emulator
+
+## Phase 4: iCopy-X Integration (Week 3-4)
+- [ ] Connect Pro Micro to iCopy-X via USB-C
+- [ ] Verify enumeration as CDC serial device
+- [ ] Test handshake with iCopy-X
+- [ ] Test card read flow end-to-end
+- [ ] Troubleshoot timing, line endings, buffer issues
+
+## Phase 5: Protocol Capture & Validation (Ongoing)
+- [ ] Acquire genuine iCS Decoder
+- [ ] Capture USB traffic with iCopy-X (usbmon / logic analyzer)
+- [ ] Compare captured protocol with reverse-engineered spec
+- [ ] Update firmware to match exact protocol
+- [ ] Test edge cases: multiple cards, error conditions, timeout behavior
+
+## Risk Register
+| Risk | Likelihood | Impact | Mitigation |
+|------|-----------|--------|------------|
+| Protocol spec is wrong | High | High | Capture real traffic before finalizing firmware |
+| Clone board quality issues | Medium | Medium | Buy from reputable seller, test USB enumeration early |
+| RP10 Wiegand format differs | Low | Medium | Sniffer phase will reveal actual format |
+| iCopy-X USB host compatibility | Low | High | Test enumeration first; may need different USB descriptor |
+| 5V logic conflicts | Low | Low | ATmega32U4 is 5V native — already resolved |
+
+## Milestones
+1. Hardware received and wired — Week 1
+2. Wiegand sniffer working — Week 2
+3. Protocol layer implemented — Week 3
+4. First successful iCopy-X handshake — Week 4
+5. Protocol validated against real iCS Decoder — Week 5-6
+Once You Restart Kilo
+After fixing the working directory and restarting, just tell me:
+
+"Fixed permissions, running from D:\kilocode\icsdecoder"
+
+And I will immediately:
+
+Verify the project files exist
+Create the firmware directory and initial Wiegand sniffer sketch
+Continue with Phase 2 implementation
