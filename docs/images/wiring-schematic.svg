@@ -1,0 +1,77 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 500" width="800" height="500">
+  <defs>
+    <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#333"/>
+    </marker>
+  </defs>
+  
+  <rect width="800" height="500" fill="#f8f9fa"/>
+  
+  <text x="400" y="30" font-family="Arial, sans-serif" font-size="20" font-weight="bold" text-anchor="middle" fill="#333">iCS Decoder — Wiring Schematic</text>
+  
+  <!-- iCopy-X Host -->
+  <rect x="300" y="60" width="200" height="80" rx="8" fill="#e3f2fd" stroke="#1565c0" stroke-width="2"/>
+  <text x="400" y="90" font-family="Arial, sans-serif" font-size="14" font-weight="bold" text-anchor="middle" fill="#1565c0">iCopy-X</text>
+  <text x="400" y="110" font-family="Arial, sans-serif" font-size="11" text-anchor="middle" fill="#333">USB-C Host</text>
+  <text x="400" y="125" font-family="Arial, sans-serif" font-size="10" text-anchor="middle" fill="#666">VBUS 5V / GND / D+ / D-</text>
+  
+  <!-- USB Cable -->
+  <line x1="400" y1="140" x2="400" y2="170" stroke="#333" stroke-width="3" marker-end="url(#arrowhead)"/>
+  <text x="420" y="155" font-family="Arial, sans-serif" font-size="10" fill="#666">USB-C Cable</text>
+  
+  <!-- Pro Micro -->
+  <rect x="250" y="170" width="300" height="140" rx="8" fill="#fff3e0" stroke="#e65100" stroke-width="2"/>
+  <text x="400" y="195" font-family="Arial, sans-serif" font-size="14" font-weight="bold" text-anchor="middle" fill="#e65100">ATmega32U4 Pro Micro</text>
+  
+  <!-- Pro Micro Pins -->
+  <circle cx="280" cy="220" r="6" fill="#ff5722"/>
+  <text x="265" y="224" font-family="Arial, sans-serif" font-size="10" text-anchor="end" fill="#333">VCC</text>
+  
+  <circle cx="280" cy="245" r="6" fill="#ff5722"/>
+  <text x="265" y="249" font-family="Arial, sans-serif" font-size="10" text-anchor="end" fill="#333">GND</text>
+  
+  <circle cx="280" cy="270" r="6" fill="#ff5722"/>
+  <text x="265" y="274" font-family="Arial, sans-serif" font-size="10" text-anchor="end" fill="#333">D2 (INT0)</text>
+  
+  <circle cx="280" cy="295" r="6" fill="#ff5722"/>
+  <text x="265" y="299" font-family="Arial, sans-serif" font-size="10" text-anchor="end" fill="#333">D3 (INT1)</text>
+  
+  <circle cx="520" cy="220" r="6" fill="#4caf50"/>
+  <text x="535" y="224" font-family="Arial, sans-serif" font-size="10" text-anchor="start" fill="#333">USB-C</text>
+  
+  <!-- Connections between iCopy-X and Pro Micro -->
+  <line x1="400" y1="140" x2="400" y2="170" stroke="#333" stroke-width="3"/>
+  
+  <!-- RP10 -->
+  <rect x="250" y="360" width="300" height="120" rx="8" fill="#e8f5e9" stroke="#2e7d32" stroke-width="2"/>
+  <text x="400" y="390" font-family="Arial, sans-serif" font-size="14" font-weight="bold" text-anchor="middle" fill="#2e7d32">HD RP10 Reader</text>
+  
+  <!-- RP10 Pins -->
+  <circle cx="280" cy="415" r="6" fill="#4caf50"/>
+  <text x="265" y="419" font-family="Arial, sans-serif" font-size="10" text-anchor="end" fill="#333">Red (VCC)</text>
+  
+  <circle cx="280" cy="440" r="6" fill="#4caf50"/>
+  <text x="265" y="444" font-family="Arial, sans-serif" font-size="10" text-anchor="end" fill="#333">Black (GND)</text>
+  
+  <circle cx="280" cy="465" r="6" fill="#4caf50"/>
+  <text x="265" y="469" font-family="Arial, sans-serif" font-size="10" text-anchor="end" fill="#333">Green (D0)</text>
+  
+  <circle cx="520" cy="415" r="6" fill="#4caf50"/>
+  <text x="535" y="419" font-family="Arial, sans-serif" font-size="10" text-anchor="start" fill="#333">White (D1)</text>
+  
+  <!-- Wires between Pro Micro and RP10 -->
+  <line x1="280" y1="220" x2="280" y2="415" stroke="#f44336" stroke-width="2" stroke-dasharray="5,5"/>
+  <text x="295" y="320" font-family="Arial, sans-serif" font-size="10" fill="#f44336">+5V</text>
+  
+  <line x1="280" y1="245" x2="280" y2="440" stroke="#212121" stroke-width="2" stroke-dasharray="5,5"/>
+  <text x="295" y="345" font-family="Arial, sans-serif" font-size="10" fill="#212121">GND</text>
+  
+  <line x1="280" y1="270" x2="280" y2="465" stroke="#2196f3" stroke-width="2" stroke-dasharray="5,5"/>
+  <text x="295" y="370" font-family="Arial, sans-serif" font-size="10" fill="#2196f3">D0</text>
+  
+  <line x1="520" y1="270" x2="520" y2="415" stroke="#9c27b0" stroke-width="2" stroke-dasharray="5,5"/>
+  <text x="530" y="345" font-family="Arial, sans-serif" font-size="10" fill="#9c27b0">D1</text>
+  
+  <!-- Ground connection note -->
+  <text x="400" y="490" font-family="Arial, sans-serif" font-size="11" text-anchor="middle" fill="#666">Common ground required between Pro Micro and RP10</text>
+</svg>

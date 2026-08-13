@@ -19,29 +19,11 @@ Firmware to emulate the Lab401 iCS Decoder for the iCopy-X. Reads iCLASS SE / iC
 
 ## Wiring
 
-```
-                 USB-C
-                   |
-             +-----+-----+
-             |  iCopy-X   |
-             +-----+-----+
-                   | VBUS 5V
-                   |
-        +----------+----------+
-        |                     |
-    +---+---+             +---+---+
-    | Pro   |             |  HD   |
-    | Micro |             | RP10  |
-    |       |             |       |
-    | VCC o--------------o Red   |
-    | GND o--------------o Black |
-    | D2  o--------------o Green |  (Wiegand D0)
-    | D3  o--------------o White |  (Wiegand D1)
-    |       |             |       |
-    +---+---+             +---+---+
-        |                     |
-       GND                  GND
-```
+![Wiring Schematic](docs/images/wiring-schematic.svg)
+
+### Pro Micro Pinout
+
+![Pro Micro Pinout](docs/images/pro-micro-pinout.svg)
 
 | Pro Micro Pin | RP10 Wire | Function |
 |---------------|-----------|----------|
