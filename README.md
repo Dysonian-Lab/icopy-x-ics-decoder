@@ -13,9 +13,11 @@ Firmware to emulate the Lab401 iCS Decoder for the iCopy-X. Reads iCLASS SE / iC
 
 | Component | Details |
 |-----------|---------|
-| MCU | Teyleten Robot Type-C Pro Micro ATmega32U4 5V 16MHz |
-| RFID Reader | HID multiCLASS SE RP10 / RP10E |
+| MCU | SparkFun Pro Micro clone ATmega32U4 5V 16MHz (Amazon B0B6HYLC44) |
+| RFID Reader | HID multiCLASS SE RP10 / RP40 |
 | Connection | USB-C to iCopy-X |
+
+> **Important:** These Pro Micro clones require a USB-C hardware modification (5.1kΩ resistors on CC1 and CC2) to power properly from the iCopy-X. See `docs/build-instructions.md` for details.
 
 ## Wiring
 

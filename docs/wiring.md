@@ -1,9 +1,14 @@
 # Wiring Diagram — ICS Decoder
 
 ## Components
-- **MCU:** Teyleten Robot Type-C Pro Micro ATmega32U4 5V 16MHz
-- **RFID Reader:** HD RP10 multiCLASS SE
+- **MCU:** SparkFun Pro Micro clone ATmega32U4 5V 16MHz (Amazon B0B6HYLC44)
+- **RFID Reader:** HD RP10 / RP40 multiCLASS SE
 - **Host:** iCopy-X via USB-C
+
+## Prerequisites
+- USB-C modification: Solder 5.1kΩ resistors from CC1→GND and CC2→GND on the Pro Micro
+  - Without this, the iCopy-X will not supply 5V to the board
+  - Do NOT short CC1 and CC2 together
 
 ## Schematic
 
