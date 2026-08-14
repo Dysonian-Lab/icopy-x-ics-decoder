@@ -1,4 +1,7 @@
 #include <Arduino.h>
+#include <stdint.h>
+#include <string.h>
+#include <ctype.h>
 
 #define WIEGAND_D0 2
 #define WIEGAND_D1 3
@@ -18,8 +21,8 @@ bool cardAvailable = false;
 uint64_t cardRaw = 0;
 uint16_t cardBits = 0;
 
-void IRAM_ATTR ISR_D0();
-void IRAM_ATTR ISR_D1();
+void ISR_D0();
+void ISR_D1();
 void processWiegandFrame();
 void sendCardBlock(uint64_t raw, uint16_t bits);
 void printHex64(uint64_t value, unsigned int minNibbles);
@@ -79,13 +82,13 @@ void loop() {
     }
 }
 
-void IRAM_ATTR ISR_D0() {
+void ISR_D0() {
     wiegandBits = (wiegandBits << 1);
     bitCount++;
     lastPulseMicros = micros();
 }
 
-void IRAM_ATTR ISR_D1() {
+void ISR_D1() {
     wiegandBits = (wiegandBits << 1) | 1ULL;
     bitCount++;
     lastPulseMicros = micros();
@@ -175,7 +178,7 @@ void printHex64(uint64_t value, unsigned int minNibbles) {
 
 void printBinary64(uint64_t value, unsigned int bits) {
     for (int i = bits - 1; i >= 0; i--) {
-        Serial.print((value >> i) & 1ULL);
+        Serial.print((unsigned int)((value >> i) & 1ULL));
     }
     Serial.println();
 }
