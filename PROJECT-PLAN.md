@@ -3,11 +3,11 @@
 ## Current Status
 - Project folder created at D:\kilocode\icsdecoder
 - Memory-bank structure established
-- Hardware selected: Teyleten Robot Type-C Pro Micro ATmega32U4 5V 16MHz
+- Hardware selected: SparkFun Qwiic Pro Micro - USB-C (ATmega32U4) 5V/16MHz
 - Protocol identified but unverified
 
 ## Phase 1: Hardware Acquisition & Test Setup (Week 1)
-- [ ] Purchase Teyleten Robot Type-C Pro Micro 3pcs (B0B6HYLC44)
+- [ ] Purchase SparkFun Qwiic Pro Micro - USB-C (ATmega32U4)
 - [ ] Purchase HD RP10 125kHz RFID reader
 - [ ] Gather USB-C cables, Dupont wires, breadboard
 - [ ] Wire RP10 to Pro Micro:
@@ -48,7 +48,7 @@
 | Risk | Likelihood | Impact | Mitigation |
 |------|-----------|--------|------------|
 | Protocol spec is wrong | High | High | Capture real traffic before finalizing firmware |
-| Clone board quality issues | Medium | Medium | Buy from reputable seller, test USB enumeration early |
+| Clone board quality issues | N/A | N/A | Using genuine SparkFun board — no clone issues |
 | RP10 Wiegand format differs | Low | Medium | Sniffer phase will reveal actual format |
 | iCopy-X USB host compatibility | Low | High | Test enumeration first; may need different USB descriptor |
 | 5V logic conflicts | Low | Low | ATmega32U4 is 5V native — already resolved |

@@ -13,11 +13,11 @@ Firmware to emulate the Lab401 iCS Decoder for the iCopy-X. Reads iCLASS SE / iC
 
 | Component | Details |
 |-----------|---------|
-| MCU | SparkFun Pro Micro clone ATmega32U4 5V 16MHz (Amazon B0B6HYLC44) |
+| MCU | SparkFun Qwiic Pro Micro - USB-C (ATmega32U4) 5V/16MHz |
 | RFID Reader | HID multiCLASS SE RP10 / RP40 |
 | Connection | USB-C to iCopy-X |
 
-> **Important:** These Pro Micro clones require a USB-C hardware modification (5.1kΩ resistors on CC1 and CC2) to power properly from the iCopy-X. See `docs/build-instructions.md` for details.
+> **Note:** The SparkFun Qwiic Pro Micro has native USB-C and requires no hardware modification.
 
 ## Wiring
 
@@ -85,9 +85,8 @@ $A_CARD_STOP$
 
 ### Arduino IDE
 
-1. Install **Arduino AVR Boards** via Boards Manager
-2. Select **Tools → Board → AVR Boards → Arduino Leonardo**
-   *(The Pro Micro ATmega32U4 uses the same core as Leonardo.)*
+1. Install **SparkFun AVR Boards** via Boards Manager (add `https://raw.githubusercontent.com/sparkfun/Arduino_Boards/master/IDE_Board_Manager/package_sparkfun_index.json` in Preferences)
+2. Select **Tools → Board → SparkFun AVR Boards → SparkFun Qwiic Pro Micro (ATmega32U4)**
 3. Open `firmware/ics-decoder/ics-decoder.ino`
 4. Select the correct COM port under **Tools → Port**
 5. Click **Upload**

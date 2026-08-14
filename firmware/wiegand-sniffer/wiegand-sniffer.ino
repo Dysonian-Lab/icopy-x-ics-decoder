@@ -30,11 +30,20 @@ void setup() {
     attachInterrupt(digitalPinToInterrupt(WIEGAND_D1), ISR_D1, FALLING);
 
     Serial.println(F("Wiegand Sniffer v2"));
-    Serial.println(F("Present a 125kHz card to the HD RP10 reader..."));
+    Serial.println(F("Present a card to the HD RP10 reader..."));
     Serial.println(F("---"));
 }
 
 void loop() {
+    if (!frameReady && bitCount > 0) {
+        noInterrupts();
+        uint32_t lastPulse = lastPulseMicros;
+        interrupts();
+        if ((micros() - lastPulse) > (BIT_TIMEOUT_MS * 1000UL)) {
+            frameReady = true;
+        }
+    }
+
     if (frameReady) {
         noInterrupts();
         uint64_t captured = wiegandBits;

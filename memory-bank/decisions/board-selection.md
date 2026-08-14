@@ -1,9 +1,9 @@
-# Development Board Selection - ATmega32U4 Pro Micro (Type-C)
+# Development Board Selection - ATmega32U4 Pro Micro (USB-C)
 
-Date: 2026-08-12
+Date: 2026-08-13
 
 ## Decision
-Use Teyleten Robot Type-C Pro Micro ATmega32U4 5V 16MHz (Amazon B0B6HYLC44) as development platform.
+Use SparkFun Qwiic Pro Micro - USB-C (ATmega32U4) 5V/16MHz as the sole development platform.
 
 ## Rationale
 - 5V native operation: no level shifter needed for RP10 Wiegand
@@ -11,8 +11,7 @@ Use Teyleten Robot Type-C Pro Micro ATmega32U4 5V 16MHz (Amazon B0B6HYLC44) as d
 - Native USB CDC for iCopy-X accessory enumeration
 - Hardware interrupts on pins 2/3 for Wiegand
 - Mature Arduino ecosystem, proven in access control
-- ~$6/board (3-pack $17.99), very cost-effective
+- Genuine SparkFun board — reliable USB enumeration, no clone issues
 
 ## Notes
-- Product listing has contradictory description text mentioning micro-USB for programming — title and feature bullets confirm Type-C
-- Clone quality varies — verify genuine ATmega32U4 chip on arrival
+- This is the only board this project supports. Do not use clones or alternative Pro Micro variants.

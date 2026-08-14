@@ -45,6 +45,15 @@ void setup() {
 }
 
 void loop() {
+    if (!frameReady && bitCount > 0) {
+        noInterrupts();
+        uint32_t lastPulse = lastPulseMicros;
+        interrupts();
+        if ((micros() - lastPulse) > (BIT_TIMEOUT_MS * 1000UL)) {
+            frameReady = true;
+        }
+    }
+
     if (frameReady) {
         noInterrupts();
         uint64_t captured = wiegandBits;
