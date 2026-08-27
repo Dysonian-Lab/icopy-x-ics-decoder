@@ -1,3 +1,7 @@
+// iCS Decoder — iCopy-X bridge firmware (ATmega32U4)
+// RP40/RP10 (multiCLASS SE) tapped on 4-wire Wiegand: Red=VCC, Black=GND, Green=D0(pin2), White=D1(pin3).
+// Captures D0/D1 falling edges via interrupts; responds to Who/ISE and RD; forwards card block to iCopy-X.
+// 48-bit Wiegand support added 2026-08-26 (iCLASS SE/SEOS cards emit 48-bit frames).
 #include <Arduino.h>
 #include <stdint.h>
 #include <string.h>
@@ -8,6 +12,7 @@
 #define CMD_BUF_SIZE 32
 
 #define BIT_TIMEOUT_MS 25
+#define LED_PIN 13
 
 volatile uint64_t wiegandBits = 0;
 volatile uint16_t bitCount = 0;
@@ -23,7 +28,6 @@ uint16_t cardBits = 0;
 
 void ISR_D0();
 void ISR_D1();
-void processWiegandFrame();
 void sendCardBlock(uint64_t raw, uint16_t bits);
 void printHex64(uint64_t value, unsigned int minNibbles);
 void printBinary64(uint64_t value, unsigned int bits);
@@ -42,6 +46,8 @@ void setup() {
     memset(cmdBuf, 0, sizeof(cmdBuf));
     cmdLen = 0;
     cardAvailable = false;
+    pinMode(LED_PIN, OUTPUT);
+    digitalWrite(LED_PIN, LOW);
 }
 
 void loop() {
@@ -66,6 +72,9 @@ void loop() {
         cardRaw = captured;
         cardBits = count;
         cardAvailable = true;
+        digitalWrite(LED_PIN, HIGH);
+        delay(50);
+        digitalWrite(LED_PIN, LOW);
     }
 
     while (Serial.available() > 0) {
@@ -107,13 +116,13 @@ void handleCommand(const char* cmd) {
     if (strcmp(cmd, "Who") == 0) {
         Serial.print(F("ISE\r\n"));
     } else if (strcmp(cmd, "RD") == 0) {
-        if (cardAvailable) {
+        if (cardAvailable && (cardBits == 26 || cardBits == 34 || cardBits == 35 || cardBits == 37 || cardBits == 48)) {
             Serial.print(F("OK\r\n"));
             sendCardBlock(cardRaw, cardBits);
-            cardAvailable = false;
         } else {
             Serial.print(F("??\r\n"));
         }
+        cardAvailable = false;
     }
 }
 
@@ -140,6 +149,9 @@ void sendCardBlock(uint64_t raw, uint16_t bits) {
     } else if (bits == 37) {
         facilityCode = (raw >> 19) & 0x1FFFF;
         cardId = (raw >> 1) & 0x3FFFF;
+    } else if (bits == 48) {
+        facilityCode = 0;
+        cardId = 0;
     }
 
     Serial.print(F("FC#:"));
@@ -147,8 +159,9 @@ void sendCardBlock(uint64_t raw, uint16_t bits) {
     Serial.print(F("ID#:"));
     Serial.println(cardId);
 
+    uint16_t hexNibbles = ((bits + 7) / 8) * 2;
     Serial.print(F("Hex#:"));
-    printHex64(raw, 10);
+    printHex64(raw, hexNibbles);
 
     Serial.print(F("Blk7#:"));
     printHex64(raw, 16);

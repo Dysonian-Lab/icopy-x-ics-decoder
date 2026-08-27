@@ -1,3 +1,8 @@
+// Wiegand Sniffer v2 — debug build
+// RP40 (multiCLASS SE) tapped on 4-wire Wiegand: Red=VCC, Black=GND, Green=D0(pin2), White=D1(pin3).
+// Captures D0/D1 falling edges via interrupts and decodes 26/34/35/37-bit frames.
+// DEBUG: [HB] heartbeat prints live bitCount each second to confirm the ISR is firing.
+// 48-bit Wiegand support added 2026-08-26 (iCLASS SE/SEOS cards emit 48-bit frames).
 #include <Arduino.h>
 #include <stdint.h>
 #include <string.h>
@@ -5,6 +10,7 @@
 
 #define WIEGAND_D0 2
 #define WIEGAND_D1 3
+#define LED_PIN 13
 
 #define BIT_TIMEOUT_MS 25
 
@@ -15,7 +21,7 @@ volatile bool frameReady = false;
 
 void ISR_D0();
 void ISR_D1();
-void processFrame();
+void processFrame(uint64_t raw, uint16_t bits);
 void printHex64(uint64_t value, unsigned int minNibbles);
 void printBinary64(uint64_t value, unsigned int bits);
 
@@ -32,9 +38,21 @@ void setup() {
     Serial.println(F("Wiegand Sniffer v2"));
     Serial.println(F("Present a card to the HD RP10 reader..."));
     Serial.println(F("---"));
+    pinMode(LED_PIN, OUTPUT);
+    digitalWrite(LED_PIN, LOW);
 }
 
 void loop() {
+    static uint32_t hb = 0;
+    if (millis() - hb > 1000) {
+        hb = millis();
+        noInterrupts();
+        uint16_t bc = bitCount;
+        interrupts();
+        Serial.print(F("[HB] bitCount="));
+        Serial.println(bc);
+    }
+
     if (!frameReady && bitCount > 0) {
         noInterrupts();
         uint32_t lastPulse = lastPulseMicros;
@@ -52,6 +70,10 @@ void loop() {
         bitCount = 0;
         frameReady = false;
         interrupts();
+
+        digitalWrite(LED_PIN, HIGH);
+        delay(50);
+        digitalWrite(LED_PIN, LOW);
 
         processFrame(captured, count);
     }
@@ -92,6 +114,9 @@ void processFrame(uint64_t raw, uint16_t bits) {
     } else if (bits == 37) {
         facilityCode = (raw >> 19) & 0x1FFFF;
         cardId = (raw >> 1) & 0x3FFFF;
+    } else if (bits == 48) {
+        facilityCode = 0;
+        cardId = 0;
     } else {
         supported = false;
     }
