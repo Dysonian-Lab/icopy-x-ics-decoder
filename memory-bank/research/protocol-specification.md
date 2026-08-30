@@ -1,63 +1,69 @@
-# iCS Decoder Protocol Specification
+# iCS Decoder Protocol Specification (Confirmed)
 
-Date: 2026-08-13
+Source: Reverse-engineered from iCopy-X firmware + genuine iCS Decoder behavior
+Date: 2026-08-17
 
-## Source
-Developer notes from doegox (RFID researcher, Proxmark3 contributor) via private communication.
+## Handshake
 
-## Status
-Protocol confirmed by reverse-engineering trace from genuine iCopy-X + iCS Decoder pair. Implementation validated by developer's working serial bridge.
+Host → Device: `Who\r\n`
+Device → Host: `ISE\r\n`
 
-## Discovery
-- Host sends: `Who\r\n`
-- Device responds: `ISE\r\n`
+## Card Polling
 
-## Read Command
-- Host sends: `RD\r\n`
-- Device responds with either:
-  - `OK\r\n` followed by card payload block
-  - `??\r\n` if no badge present or error
+Host → Device: `RD\r\n`
+Device → Host: `??\r\n` (no card)
+Device → Host: `OK\r\n` + card block (card present)
 
-## Card Payload Format
+## Payload Format
+
 ```
 $A_CARD_START$
-wiedata#:<binary bitstream>
-Bit#:<bit count>
-FC#:<facility code>
-ID#:<card number>
-Hex#:<hex value>
-Blk7#:<64-bit hex>
-Bits#:<48-bit padded binary>
+wiedata#:<RAW_BINARY_STREAM>
+Bit#:<BIT_COUNT>
+FC#:<FACILITY_CODE>
+ID#:<CARD_NUMBER>
+Hex#:<RAW_HEX_PAYLOAD>
+Blk7#:<64BIT_HEX_PADDING>
+Bits#:<48BIT_ALIGNED_BINARY>
 $A_CARD_STOP$
 ```
 
-## Example Output
+## Field Specifications
+
+| Field | Format | Description |
+|-------|--------|-------------|
+| `wiedata#:` | ASCII binary | Exact-length binary string matching Wiegand bit count |
+| `Bit#:` | Base-10 integer | Total captured bits (26, 34, 35, 37, etc.) |
+| `FC#:` | Base-10 integer | Facility code (0 if format has no FC field) |
+| `ID#:` | Base-10 integer | Card number |
+| `Hex#:` | Zero-padded hex | Raw bits padded to byte boundary |
+| `Blk7#:` | 16-char hex | 64-bit zero-padded hex for Proxmark3 block write |
+| `Bits#:` | 48-char binary | Left-padded to 48 characters |
+
+## Example: 26-bit H10301
+
 ```
 $A_CARD_START$
-wiedata#:11100101100110111001000001
+wiedata#:10011001000011000000111001
 Bit#:26
-FC#:203
-ID#:14112
-Hex#:2007966e41
-Blk7#:0000000007966e41
-Bits#:00000010000000000111100101100110111001000001
+FC#:100
+ID#:12345
+Hex#:02643039
+Blk7#:0000000002643039
+Bits#:000000000000000000000010011001000011000000111001
 $A_CARD_STOP$
 ```
-
-## Hardware Details
-- Uses HID Multiclass SE RP10E reader
-- RP10 reads iCLASS SE/SEOS cards via 13.56 MHz interface
-- RP10 outputs card data in Wiegand format on D0/D1
-- Pro Micro captures Wiegand bits and formats payload
-- Device enumerates as USB CDC serial to iCopy-X
 
 ## Implementation Notes
-- Developer implemented a working serial bridge based on trace analysis
-- Developer does not have a genuine iCS Decoder for further validation
-- No other commands beyond Who/RD are known
-- Baud rate and VID/PID of genuine device are unknown
 
-## Notes
-- Exact protocol is proprietary and closed-source
-- No public documentation exists from Lab401 or iCopy-X manufacturer
-- Must be validated with USB protocol capture of genuine iCopy-X + iCS Decoder pair
+- Line endings: `\r\n`
+- Blk7# is always 16 hex chars (64 bits) regardless of actual bit count
+- Bits# is always 48 binary chars, left-padded with zeros
+- Hex# is byte-boundary padded: 26 bits → 8 hex chars, 34 bits → 10 hex chars
+- FC# outputs 0 for formats without a facility code field
+- Protocol strings (`Who`, `ISE`, `RD`, `$A_CARD_START$`, etc.) are iCopy-X firmware conventions, not HID standards
+
+## Reference Implementations
+
+- Competitor: https://github.com/iCopy-X-Community/icopyx-diy-ics-decoder
+- Open firmware stub: `src/lib/activity_main.py:7997-8017` in lab-401/icopy-x

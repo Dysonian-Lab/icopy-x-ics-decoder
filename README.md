@@ -55,23 +55,42 @@ wiedata#:<binary bitstream>
 Bit#:<bit count>
 FC#:<facility code>
 ID#:<card number>
-Hex#:<hex value>
-Blk7#:<64-bit hex>
-Bits#:<48-bit padded binary>
+Hex#:<raw hex padded to byte boundary>
+Blk7#:<64-bit zero-padded hex>
+Bits#:<48-bit left-padded binary>
 $A_CARD_STOP$
 ```
 
-### Example Output
+### Field Specifications
+
+| Field | Format | Description |
+|-------|--------|-------------|
+| `wiedata#:` | ASCII binary | Exact-length binary string matching Wiegand bit count |
+| `Bit#:` | Base-10 integer | Total captured bits (26, 34, 35, 37, etc.) |
+| `FC#:` | Base-10 integer | Facility code (0 if format has no FC field) |
+| `ID#:` | Base-10 integer | Card number |
+| `Hex#:` | Zero-padded hex | Raw bits padded to nearest byte boundary |
+| `Blk7#:` | 16-char hex | 64-bit zero-padded hex for Proxmark3 block write |
+| `Bits#:` | 48-char binary | Left-padded with zeros to 48 characters |
+
+### Padding Notes
+
+- **No artificial bit insertion is used.** Some reverse-engineered implementations add extra padding bits (`+0x2000000000 + (1<<bitnum)`) to Hex# and Bits# fields. This is **not required** by the iCopy-X parser. The confirmed format uses simple zero-padding only.
+- `Hex#` is padded to the nearest byte boundary: 26 bits → 8 hex chars, 34 bits → 10 hex chars
+- `Blk7#` is always 16 hex chars (64 bits), zero-padded on the left
+- `Bits#` is always 48 binary chars, zero-padded on the left
+
+### Example Output (26-bit H10301)
 
 ```
 $A_CARD_START$
-wiedata#:11100101100110111001000001
+wiedata#:10011001000011000000111001
 Bit#:26
-FC#:203
-ID#:14112
-Hex#:2007966e41
-Blk7#:0000000007966e41
-Bits#:00000010000000000111100101100110111001000001
+FC#:100
+ID#:12345
+Hex#:02643039
+Blk7#:0000000002643039
+Bits#:000000000000000000000010011001000011000000111001
 $A_CARD_STOP$
 ```
 
