@@ -1,8 +1,32 @@
 # ICS DECODER - CURRENT STATE (2026-09-01)
 
-## LATEST BUILD: v1.0-ICS (commit 7d560c7)
+## LATEST BUILD: v1.0-ICS (commit 301c531)
 
 ---
+
+## TARGET DETECTION BEFORE WRITE (commit 301c531)
+
+### Problem
+Write attempted even when no target card present, causing immediate failure with no user feedback about card presence.
+
+### Fix
+- `_do_write()` now re-detects target card before attempting write
+- If no target detected, fails immediately with 'No card detected!' message
+- Result state shows 'No card detected!' when target_type is None
+- Retry button re-detects target before retrying write
+
+---
+
+## NON-26-BIT GUARD (commit 30831f9)
+
+### Problem
+48-bit SEOS payload (0x801EC2000A7A) wrote FC:0 CN:0 to T5577 because parser returned fc=0 cn=0 for non-26-bit formats.
+
+### Fix
+- `write_to_t5577()` now accepts `raw_bits` parameter for fallback
+- If fc=0 and cn=0 but raw_bits available, uses `lf hid clone -r <raw>`
+- Prevents writing blank cards for non-26-bit formats
+- Added `is_valid_26bit(fc, cn)` helper function
 
 ## T5577 WRITE BUG FIX (commit 3d228e3)
 
@@ -221,9 +245,9 @@ Returns: `{"valid": bool, "fc": int, "cn": int, "shifted_hex": str}`
 
 ### LF Write Details
 - **Data:** FC (8-bit) + Card ID (16-bit) → raw HID Prox 26-bit format
-- **Method:** `lf hid clone -r <raw_hex>` via PM3 executor
+- **Method:** `lf hid clone -w H10301 --fc {fc} --cn {cn}` via PM3 executor
+- **Non-26-bit fallback:** `lf hid clone -r <raw_hex>` when fc=0 and cn=0
 - **Format:** H10301 (HID ProxCard II)
-- **Encoding:** `raw = (FC << 16) | CardID` → 6 hex digits
 
 ---
 
@@ -251,8 +275,8 @@ READING → (card detected) → WAIT_BLANK → (Write pressed) → WRITING → (
 - **None:** Shows "Place blank on coil..."
 
 ### Button Actions
-- **WAIT_BLANK + Write:** Start write operation (auto-detects HF/LF)
-- **RESULT + Retry:** Re-write same data without re-reading source
+- **WAIT_BLANK + Write:** Start write operation (auto-detects HF/LF, re-detects target before writing)
+- **RESULT + Retry:** Re-detects target, then re-writes same data without re-reading source
 - **RESULT + Back:** Exit to menu
 
 ---
@@ -286,8 +310,8 @@ READING → (card detected) → WAIT_BLANK → (Write pressed) → WRITING → (
 | `detect_t5577()` | Detect LF T5577 blank |
 | `detect_target()` | Auto-detect target type |
 | `write_to_card(blk7)` | Write to HF iClass blank |
-| `write_to_t5577(fc, cn)` | Write to LF T5577 blank |
-| `_encode_hid_prox_26(fc, cn)` | Encode FC+CN to HID Prox 26-bit |
+| `write_to_t5577(fc, cn, raw_bits=None)` | Write to LF T5577 blank (with non-26-bit fallback) |
+| `is_valid_26bit(fc, cn)` | Check if FC/CN represent valid 26-bit frame |
 
 ### Write Pipeline (Open-Source Firmware)
 
@@ -300,6 +324,13 @@ READING → (card detected) → WAIT_BLANK → (Write pressed) → WRITING → (
 | `hficlass.py` | `hf iclass rdbl` - card detection |
 | `lfwrite.py` | `write_hid()` - LF HID clone |
 
+### Write Flow
+1. User presses Write (WAIT_BLANK) or Retry (RESULT)
+2. `_do_write()` re-detects target card via `ics_decoder.detect_target()`
+3. If no target detected → fail with "No card detected!" message
+4. If target detected → write using appropriate method (HF or LF)
+5. For LF: uses `lf hid clone -w H10301` for 26-bit, `lf hid clone -r` for non-26-bit
+
 ### PM3 Commands Used
 
 | Command | Purpose |
@@ -307,7 +338,8 @@ READING → (card detected) → WAIT_BLANK → (Write pressed) → WRITING → (
 | `hf iclass rdbl --blk 00 -k 2020666666668888` | Detect HF iClass blank |
 | `hf iclass wrbl --blk {b} -d {data} -k {key}` | Write block to iClass |
 | `lf t55xx detect` | Detect LF T5577 blank |
-| `lf hid clone -r {raw_hex}` | Clone HID Prox to T5577 |
+| `lf hid clone -w H10301 --fc {fc} --cn {cn}` | Clone HID Prox to T5577 (26-bit) |
+| `lf hid clone -r {raw_hex}` | Clone HID Prox to T5577 (raw, non-26-bit fallback) |
 
 **IMPORTANT:** `hf iclass info` HANGS on iCopy-X hardware (FPGA mismatch) - DO NOT USE
 
@@ -319,6 +351,7 @@ READING → (card detected) → WAIT_BLANK → (Write pressed) → WRITING → (
 - **Activity:** IClassSEActivity at `src/lib/activity_main.py:8007`
 - **Registry:** `_ACTIVITY_REGISTRY` at `src/lib/actmain.py:77`
 - **Menu Entry:** `MENU_ITEMS` at `src/lib/actmain.py:145`
+- **Latest commits:** 30831f9 (non-26-bit guard), 301c531 (target detection)
 
 ---
 
@@ -326,7 +359,7 @@ READING → (card detected) → WAIT_BLANK → (Write pressed) → WRITING → (
 
 | Repo | Purpose |
 |------|---------|
-| `Dysonian-Lab/icopy-x` | Main fork with ICS Decoder (commit 7d560c7) |
+| `Dysonian-Lab/icopy-x` | Main fork with ICS Decoder (commit 301c531) |
 | `Dysonian-Lab/icopy-x-ics-decoder` | Firmware, releases |
 | `lab-401/icopy-x` | Upstream (read-only) |
 
