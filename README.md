@@ -1,13 +1,69 @@
 # iCopy-X iCS Decoder
 
-Firmware to emulate the Lab401 iCS Decoder for the iCopy-X. Reads iCLASS SE / iCLASS SEOS cards via the HD RP10 reader and presents them to the iCopy-X as a USB CDC serial accessory.
+Firmware and middleware to emulate the Lab401 iCS Decoder for the iCopy-X. Reads iCLASS SE / iCLASS SEOS cards via the HD RP10 reader and presents them to the iCopy-X as a USB CDC serial accessory.
 
 ## How It Works
 
-1. RP10 reads iCLASS SE / iCLASS SEOS card via its 13.56 MHz interface
-2. RP10 outputs card data in Wiegand format on D0/D1
-3. ATmega32U4 captures Wiegand bits and extracts Facility Code / Card Number
-4. ATmega32U4 formats the card payload and sends it to the iCopy-X over USB-C
+### Hardware Layer (ICS Decoder Dongle)
+1. RP10 reads iCLASS SE / iCLASS SEOS card via 13.56 MHz interface
+2. For SEOS cards: Performs ISO 7816 handshake, challenge-response auth, and EAX decryption
+3. Outputs decrypted PACS payload via USB serial ($A_CARD_START$...$A_CARD_STOP$)
+
+### Middleware Layer (iCopy-X)
+1. Parses SIO PACS payload with NN right-shift bit extraction
+2. Extracts FC/CN from 26-bit Wiegand frame
+3. Auto-detects target blank type (HF iClass or LF T5577)
+4. Writes credential to blank via PM3 executor
+
+## SEOS SIO Parsing (Black Hat Asia 2025)
+
+SEOS cards do NOT expose credential data in plaintext. The ICS Decoder hardware performs the full cryptographic handshake and decryption.
+
+### NN Right-Shift Extraction
+
+**Format:** `[NN] [Payload Bytes]`
+- `NN` = number of trailing zero padding bits (byte 0)
+- Right-shift bitstream by NN bits, then parse 26-bit Wiegand frame
+
+**26-bit Wiegand Frame (H10301):**
+```
+[P_even (1b)] [FC (8b)] [CN (16b)] [P_odd (1b)]
+```
+
+**Extraction:**
+```python
+shift_nn = payload[0]
+bitstream = int.from_bytes(payload[1:], byteorder="big")
+shifted = bitstream >> shift_nn
+fc = (shifted >> 17) & 0xFF      # Facility Code
+cn = (shifted >> 1) & 0xFFFF     # Card Number
+```
+
+### ASN.1 TLV Container
+
+If decoder outputs raw container (Tag 0x85):
+```python
+if data[0] == 0x85:
+    length = data[1]
+    data = data[2:2 + length]
+# Then apply NN right-shift as above
+```
+
+## Dual-Frequency Target Support
+
+| Target | Frequency | Card Types | Detection | Write Method |
+|--------|-----------|------------|-----------|--------------|
+| HF iClass | 13.56 MHz | Picopass 2k/16k, Magic iClass | `hf iclass rdbl` | `hf iclass wrbl` |
+| LF T5577 | 125 kHz | T5577 (HID Prox) | `lf t55xx detect` | `lf hid clone -w H10301 --fc --cn` |
+
+### HF Write (iClass)
+- Uses `iclasswrite.writeDataBlocks()` → `hf iclass wrbl`
+- Writes Block 7 (PACS credential) to legacy iClass/Picopass blanks
+
+### LF Write (T5577)
+- Uses `lf hid clone -w H10301 --fc {fc} --cn {cn}`
+- Lets Proxmark3 handle H10301 framing and parity calculation natively
+- **Do NOT use `lf hid clone -r` with manual bit-packing** - causes corrupted cards
 
 ## Hardware
 
@@ -58,6 +114,8 @@ ID#:<card number>
 Hex#:<raw hex padded to byte boundary>
 Blk7#:<64-bit zero-padded hex>
 Bits#:<48-bit left-padded binary>
+SIO#:<decrypted PACS payload with NN prefix>
+SIO_CONTAINER#:<raw ASN.1 TLV container>
 $A_CARD_STOP$
 ```
 
@@ -72,6 +130,8 @@ $A_CARD_STOP$
 | `Hex#:` | Zero-padded hex | Raw bits padded to nearest byte boundary |
 | `Blk7#:` | 16-char hex | 64-bit zero-padded hex for Proxmark3 block write |
 | `Bits#:` | 48-char binary | Left-padded with zeros to 48 characters |
+| `SIO#:` | Hex string | Decrypted PACS payload with NN padding byte |
+| `SIO_CONTAINER#:` | Hex string | Raw ASN.1 TLV container (Tag 0x85) |
 
 ### Padding Notes
 
@@ -94,6 +154,23 @@ Bits#:000000000000000000000010011001000011000000111001
 $A_CARD_STOP$
 ```
 
+### Example SEOS SIO Output
+
+```
+$A_CARD_START$
+Blk7#:00000000029D6BDD
+SIO#:061B7D0040
+FC#:78
+ID#:46574
+$A_CARD_STOP$
+```
+
+In this example:
+- `SIO#:061B7D0040` - Decrypted PACS payload with NN=6 padding bits
+- After right-shift by 6: `0x029D6BDD` (26-bit Wiegand frame with parity)
+- FC = `(0x029D6BDD >> 17) & 0xFF` = 78
+- CN = `(0x029D6BDD >> 1) & 0xFFFF` = 46574
+
 ## Build Instructions
 
 ### Prerequisites
@@ -104,7 +181,7 @@ $A_CARD_STOP$
 
 ### Arduino IDE
 
-1. Install **SparkFun AVR Boards** via Boards Manager (add `https://raw.githubusercontent.com/sparkfun/Arduino_Boards/master/IDE_Board_Manager/package_sparkfun_index.json` in Preferences)
+1. Install **SparkFun AVR Boards** via Boards Manager (add `https://raw.githubusercontent.com/sparkfun/Arduino_Boards/main/IDE_Board_Manager/package_sparkfun_index.json` in Preferences)
 2. Select **Tools → Board → SparkFun AVR Boards → SparkFun Qwiic Pro Micro (ATmega32U4)**
 3. Open `firmware/ics-decoder/ics-decoder.ino`
 4. Select the correct COM port under **Tools → Port**
@@ -116,6 +193,38 @@ $A_CARD_STOP$
 pio run -t upload
 ```
 
+## iCopy-X Middleware Integration
+
+The iCopy-X middleware (`src/middleware/ics_decoder.py`) handles:
+
+1. **Serial Communication** - Detects ICS Decoder via USB serial
+2. **SIO Parsing** - Extracts FC/CN from SEOS PACS payload
+3. **Target Detection** - Auto-detects HF iClass or LF T5577 blanks
+4. **Write Routing** - Routes to appropriate PM3 write command
+
+### Key Functions
+
+| Function | Purpose |
+|----------|---------|
+| `detect_decoder()` | Scan serial ports for ICS Decoder |
+| `read_card(ser)` | Send RD command, read card block |
+| `parse_block(text)` | Parse $A_CARD_START$...$A_CARD_STOP$ block |
+| `extract_and_shift_wiegand(data)` | Unified NN right-shift + Wiegand parsing |
+| `detect_target()` | Auto-detect target type (HF/LF) |
+| `write_to_card(blk7)` | Write to HF iClass blank |
+| `write_to_t5577(fc, cn)` | Write to LF T5577 blank |
+
+### PM3 Commands Used
+
+| Command | Purpose |
+|---------|---------|
+| `hf iclass rdbl --blk 00 -k 2020666666668888` | Detect HF iClass blank |
+| `hf iclass wrbl --blk {b} -d {data} -k {key}` | Write block to iClass |
+| `lf t55xx detect` | Detect LF T5577 blank |
+| `lf hid clone -w H10301 --fc {fc} --cn {cn}` | Clone HID Prox to T5577 |
+
+**IMPORTANT:** `hf iclass info` HANGS on iCopy-X hardware (FPGA mismatch) - DO NOT USE
+
 ## Development
 
 ### Directory Structure
@@ -124,6 +233,9 @@ pio run -t upload
 ├── firmware/
 │   ├── ics-decoder/       # Production iCS Decoder firmware
 │   └── wiegand-sniffer/   # Debug tool for validating Wiegand capture
+├── src/
+│   └── middleware/
+│       └── ics_decoder.py # iCopy-X middleware (SIO parsing + write routing)
 ├── docs/
 │   ├── build-instructions.md
 │   └── wiring.md
