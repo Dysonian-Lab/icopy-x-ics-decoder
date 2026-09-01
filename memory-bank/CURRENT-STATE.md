@@ -1,32 +1,30 @@
 # ICS DECODER - CURRENT STATE (2026-09-01)
 
-## LATEST BUILD: v1.0-ICS (commit 301c531)
+## LATEST BUILD: v1.0-ICS (commit e70b5dd)
 
 ---
 
-## TARGET DETECTION BEFORE WRITE (commit 301c531)
+## NON-26-BIT LF GUARD (commit e70b5dd)
 
 ### Problem
-Write attempted even when no target card present, causing immediate failure with no user feedback about card presence.
+Raw `lf hid clone -r` fallback for 48-bit SEOS payloads produces unreadable
+125 kHz LF cards because extended SIO is structured for HF memory.
 
 ### Fix
-- `_do_write()` now re-detects target card before attempting write
-- If no target detected, fails immediately with 'No card detected!' message
-- Result state shows 'No card detected!' when target_type is None
-- Retry button re-detects target before retrying write
+- `write_to_t5577()` returns False for non-26-bit formats (no raw fallback)
+- `_do_write()` blocks LF writes when fc=0/cn=0 and shows "Non-26b SIO!"
+- WAIT_BLANK shows "Incompatible: Requires HF iClass" for LF with non-26b
+- Stops polling timers before write to prevent serial port collisions
+- Retry in STATE_RESULT uses retained `_source_data` without re-scanning
 
----
+### Target Handling Rules
 
-## NON-26-BIT GUARD (commit 30831f9)
-
-### Problem
-48-bit SEOS payload (0x801EC2000A7A) wrote FC:0 CN:0 to T5577 because parser returned fc=0 cn=0 for non-26-bit formats.
-
-### Fix
-- `write_to_t5577()` now accepts `raw_bits` parameter for fallback
-- If fc=0 and cn=0 but raw_bits available, uses `lf hid clone -r <raw>`
-- Prevents writing blank cards for non-26-bit formats
-- Added `is_valid_26bit(fc, cn)` helper function
+| Credential Type | Detected Blank | Action |
+|-----------------|----------------|--------|
+| Standard 26-bit (fc > 0, cn > 0) | LF T5577 | Execute `lf hid clone -w H10301 --fc {fc} --cn {cn}` |
+| Standard 26-bit (fc > 0, cn > 0) | HF iClass | Execute `hf iclass wrbl` (Block 7) |
+| Extended/Custom (fc == 0, cn == 0) | LF T5577 | Block write -> Show: "Incompatible: Requires HF iClass" |
+| Extended/Custom (fc == 0, cn == 0) | HF iClass | Execute `hf iclass wrbl` (Block 7 raw 8-byte copy) |
 
 ## T5577 WRITE BUG FIX (commit 3d228e3)
 
@@ -351,7 +349,7 @@ READING → (card detected) → WAIT_BLANK → (Write pressed) → WRITING → (
 - **Activity:** IClassSEActivity at `src/lib/activity_main.py:8007`
 - **Registry:** `_ACTIVITY_REGISTRY` at `src/lib/actmain.py:77`
 - **Menu Entry:** `MENU_ITEMS` at `src/lib/actmain.py:145`
-- **Latest commits:** 30831f9 (non-26-bit guard), 301c531 (target detection)
+- **Latest commits:** e70b5dd (non-26-bit LF guard), 301c531 (target detection), 30831f9 (raw fallback removed)
 
 ---
 
@@ -359,7 +357,7 @@ READING → (card detected) → WAIT_BLANK → (Write pressed) → WRITING → (
 
 | Repo | Purpose |
 |------|---------|
-| `Dysonian-Lab/icopy-x` | Main fork with ICS Decoder (commit 301c531) |
+| `Dysonian-Lab/icopy-x` | Main fork with ICS Decoder (commit e70b5dd) |
 | `Dysonian-Lab/icopy-x-ics-decoder` | Firmware, releases |
 | `lab-401/icopy-x` | Upstream (read-only) |
 
