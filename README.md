@@ -171,6 +171,64 @@ In this example:
 - FC = `(0x029D6BDD >> 17) & 0xFF` = 78
 - CN = `(0x029D6BDD >> 1) & 0xFFFF` = 46574
 
+## Release History
+
+### v0.1.6.3 — Proxmark3 v4.23346 (Frosty Lemon) Compatibility Verification
+
+Full empirical validation of all PM3 command dispatches against the upstream
+Proxmark3 v4.23346 (Iceman) source tree and Capabilities v11.
+
+#### PM3 Compatibility
+
+All 47 AutoCopy PM3 command dispatch points were verified against the
+Proxmark3 v4.23346 source tree at `pm3/proxmark3/client/src/`. Every unique
+command template (32 total) was cross-referenced against the actual `CLIParserInit`
+and `argtable` definitions in the PM3 C source files.
+
+**Verification results:**
+- 47 dispatch points audited (all via direct `executor.startPM3Task` — 0 routed through pm3_compat)
+- 32 unique command templates extracted and verified
+- 32/32 commands: FULL MATCH
+- 0 mismatches, 0 deprecated flags, 0 missing parameters
+
+The audit script `scripts/audit_pm3_cli.py` performs AST-based static analysis
+of the extracted ICSDecoder Python source to extract command templates and
+response parsers. A compliance matrix comparing AutoCopy dispatches against
+PM3 v4.23346 CLI specs is available in `docs/AUTOCOPY_AUDIT_MAP.md`.
+
+#### Commands by Category
+
+| Category | Card Types | Dispatch Points |
+|----------|-----------|-----------------|
+| LF Clone Writes & Verifications | EM410x, HID, Indala, FDX-B, KERI, NEDAP, T5577, EM4x05, Hitag2/Paxton | 21 |
+| HF Mifare Classic | Gen1a (csetuid, cload, wrbl, cgetblk) + Gen2 detection | 14 |
+| HF Ultralight / NTAG | MFU restore/info (EV1, NTAG213/215/216, Magic UL) | 3 |
+| LF Hitag2 / Paxton | Paxton blocks, Hitag2 authenticated ops | 4 |
+| HF iCLASS & ISO15693 | calcnewkey, wrbl, rdbl | 5 |
+
+#### Flag Compatibility Verified
+
+- **`-k` / `--key`**: Used consistently as the key parameter across all
+  Hitag2, MIFARE Classic, MFU, and iCLASS commands — no conflict with `--keep`.
+- **`-p`**: Maps to `--pwd` on `lf t55xx write`, `lf hitag wrbl`, and
+  `lf em 4x05 write` — verified against respective argtable definitions.
+- **`--blk`**: Maps to `arg_int1(NULL, "blk", ...)` on `hf mf wrbl`,
+  `hf mf cgetblk`, `hf iclass wrbl`, `hf iclass rdbl` — all verified.
+- **`-r` / `--raw`**: Used for raw data across LF clone commands
+  (HID, Indala, SecuraKey, Gallagher, Paradox, Nexwatch) — verified.
+
+#### CLI Syntax
+
+All PM3 command dispatches use Iceman POSIX-compliant CLI syntax natively.
+The AutoCopy engine does not inject any runtime middleware transformations
+between the dispatched command and the PM3 client. Commands like `lf sea`
+and `hf sea` are valid CLI prefix-match aliases for `lf search` and
+`hf search` respectively.
+
+### v0.1.6.2
+
+- ... (previous release notes)
+
 ## Build Instructions
 
 ### Prerequisites
@@ -216,12 +274,38 @@ The iCopy-X middleware (`src/middleware/ics_decoder.py`) handles:
 
 ### PM3 Commands Used
 
+The following commands are dispatched by the AutoCopy engine during credential cloning:
+
 | Command | Purpose |
 |---------|---------|
-| `hf iclass rdbl --blk 00 -k 2020666666668888` | Detect HF iClass blank |
-| `hf iclass wrbl --blk {b} -d {data} -k {key}` | Write block to iClass |
-| `lf t55xx detect` | Detect LF T5577 blank |
-| `lf hid clone -w H10301 --fc {fc} --cn {cn}` | Clone HID Prox to T5577 |
+| `hf iclass rdbl --blk {b} -k {key}` | Read iCLASS block for target detection |
+| `hf iclass wrbl --blk {b} -d {data} -k {key}` | Write iCLASS block |
+| `hf iclass calcnewkey --old {old} --new {new}` | Calculate diversified iCLASS key |
+| `hf mf wrbl --blk {b} -a\|-b -k {key} -d {data} --force` | Write MIFARE Classic block |
+| `hf mf csetuid -u {uid} --atqa {atqa} --sak {sak}` | Set UID/ATQA/SAK on Gen1a card |
+| `hf mf cload -f {file}` | Load dump to Gen1a card |
+| `hf mf cgetblk --blk {b}` | Read MIFARE Classic block |
+| `hf 14a info` | ISO14443-A card presence/info |
+| `hf 14a raw {-flags} {hex}` | Raw 14a commands (Gen1a freeze sequence) |
+| `hf mfu info` | MIFARE Ultralight/NTAG info |
+| `hf mfu restore -f {file} [-e\|-s\|-k {key}]` | Restore MFU/NTAG dump |
+| `lf t55xx write -b {b} -d {data} [-p {pwd}]` | Write T5577 block |
+| `lf t55xx restore -f {file}` | Restore T5577 from dump |
+| `lf hid clone -r {raw}` | Clone HID Prox to T5577 |
+| `lf indala clone -r {raw}` | Clone Indala to T5577 |
+| `lf fdxb clone --country {c} --national {n}` | Clone FDX-B to T5577 |
+| `lf keri clone -t i --cn {cn}` | Clone KERI to T5577 |
+| `lf hitag read --ht2 -k {key}` | Read Hitag2/Paxton |
+| `lf hitag wrbl --ht2 -p {p} -d {d} -k {key}` | Write Hitag2/Paxton block |
+| `lf securakey clone -r {raw}` | Clone SecuraKey to T5577 |
+| `lf em 410x clone --id {id}` | Clone EM410x to T5577 |
+| `lf em 4x05 write -a {a} -d {data} -p {pwd}` | Write EM4x05 block |
+| `lf em 4x05 read -a {a}` | Read EM4x05 block |
+| `lf sea` | LF tag search (alias for `lf search`) |
+| `hf sea` | HF tag search (alias for `hf search`) |
+| `data save -f {file}` | Save graph buffer to file |
+| `hf felica reader` | FeliCa tag reader |
+| `hw sync` | Hardware sync |
 
 **IMPORTANT:** `hf iclass info` HANGS on iCopy-X hardware (FPGA mismatch) - DO NOT USE
 
@@ -233,13 +317,18 @@ The iCopy-X middleware (`src/middleware/ics_decoder.py`) handles:
 ├── firmware/
 │   ├── ics-decoder/       # Production iCS Decoder firmware
 │   └── wiegand-sniffer/   # Debug tool for validating Wiegand capture
+├── release/
+│   └── extracted-955/      # Extracted ICSDecoder source (v9.5.5)
+├── scripts/
+│   └── audit_pm3_cli.py    # PM3 command dispatch audit script
+├── docs/
+│   ├── build-instructions.md
+│   ├── wiring.md
+│   └── AUTOCOPY_AUDIT_MAP.md  # AutoCopy PM3 command audit report
+├── memory-bank/            # Project research, decisions, progress
 ├── src/
 │   └── middleware/
 │       └── ics_decoder.py # iCopy-X middleware (SIO parsing + write routing)
-├── docs/
-│   ├── build-instructions.md
-│   └── wiring.md
-├── memory-bank/            # Project research, decisions, progress
 └── README.md
 ```
 

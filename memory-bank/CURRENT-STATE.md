@@ -255,7 +255,7 @@ Returns: `{"valid": bool, "fc": int, "cn": int, "shifted_hex": str}`
 ```
 READING → (card detected) → WAIT_BLANK → (Write pressed) → WRITING → (done) → RESULT
                      ↑                                                    │
-                     └──────────────── (Retry) ←─────────────────────────┘
+                     └──────────────── (Retry) ↝─────────────────────────┘
 ```
 
 ### State Descriptions
@@ -283,16 +283,24 @@ READING → (card detected) → WAIT_BLANK → (Write pressed) → WRITING → (
 
 ### Key Files Modified
 
-| File | Purpose |
+> **Note:** This workspace (`D:\kilocode\icsdecoder`) is self-contained. All application code lives in `release/extracted-955/`. The `src/` paths below are conceptual references to the upstream Dysonian-Lab/icopy-x fork repository structure.
+
+| File (workspace) | File (upstream concept) | Purpose |
+|------------------|------------------------|---------|
+| `release/extracted-955/app.py` | `src/app.py` | Swap logic with validation, rollback, execv |
+| `release/extracted-955/lib/actmain.py` | `src/lib/actmain.py` | MENU_ITEMS + _ACTIVITY_REGISTRY |
+| `release/extracted-955/lib/activity_main.py` | `src/lib/activity_main.py` | IClassSEActivity state machine |
+| `release/extracted-955/lib/ics_decoder.py` | `src/middleware/ics_decoder.py` | SIO parsing + target detection |
+| `release/extracted-955/lib/iclasswrite.py` | `src/middleware/iclasswrite.py` | HF write routines |
+| `release/extracted-955/lib/lfwrite.py` | `src/middleware/lfwrite.py` | LF HID clone routine |
+| `release/extracted-955/lib/executor.py` | `src/middleware/executor.py` | PM3 command execution |
+
+### ACTIVE MODIFIED FILES (2026-10-07)
+
+| File | Changes |
 |------|---------|
-| `src/app.py` | Swap logic with validation, rollback, execv |
-| `src/lib/actmain.py` | MENU_ITEMS + _ACTIVITY_REGISTRY |
-| `src/lib/activity_main.py` | IClassSEActivity state machine |
-| `src/middleware/ics_decoder.py` | SIO parsing + target detection |
-| `src/middleware/iclasswrite.py` | HF write routines |
-| `src/middleware/lfwrite.py` | LF HID clone routine |
-| `src/middleware/executor.py` | PM3 command execution |
-| `tools/build_ipk.py` | Build configuration |
+| `release/extracted-955/lib/ics_decoder.py` | Replaced `_log()` with non-blocking implementation using `_LOG_DIR='/mnt/upan/dump/ics_decoder'`, line buffering (`buffering=1`), no `os.fsync()`, no `os.path.ismount()`. Added `_get_log_filepath()` and `reset_log_session()`. |
+| `release/extracted-955/lib/activity_main.py` | `IClassSEActivity`: Added `reset_log_session()` in `onCreate`, `READ:` log in `_poll_decoder`, `WRITE_START:` log in `_do_write`, `VERIFY_RESULT:` logs in `_do_verify_bg`. |
 
 ### ics_decoder.py Functions
 
@@ -346,23 +354,430 @@ READING → (card detected) → WAIT_BLANK → (Write pressed) → WRITING → (
 ## BUILD DETAILS
 
 - **IPK:** `D:\kilocode\icopy-x\icopy-x-ics-decoder-noflash.ipk` (v1.0-ICS, 12.2 MB)
+- **Release v0.1.6:** https://github.com/Dysonian-Lab/icopy-x-ics-decoder/releases/tag/v0.1.6
+  - `icopy-x-ics-decoder-noflash.ipk` (11.4 MB) — Factory PM3, Lua 5.1
+  - `ics-decoder-firmware.hex` (19 KB) — Pro Micro (ATmega32U4)
 - **Activity:** IClassSEActivity at `src/lib/activity_main.py:8007`
 - **Registry:** `_ACTIVITY_REGISTRY` at `src/lib/actmain.py:77`
 - **Menu Entry:** `MENU_ITEMS` at `src/lib/actmain.py:145`
-- **Latest commits:** e70b5dd (non-26-bit LF guard), 301c531 (target detection), 30831f9 (raw fallback removed)
+- **Latest commits:** 91477e7 (synced with upstream v4.23346), e70b5dd (non-26-bit LF guard), 301c531 (target detection), 30831f9 (raw fallback removed)
 
 ---
+---
 
+## TESTER LOG ANALYSIS (2026-09-16)
+
+### Tester Setup
+- **Device:** Genuine Nikola iCS Decoder on `/dev/ttyUSB0` (FTDI, responds `ISE` to `Who`)
+- `/dev/ttyACM0` present but responds with `"b"` — not a valid decoder, correctly skipped
+- **Card:** Regular iClass Legacy card (NOT SEOS/SE)
+
+### Log Findings (logs 013, 014 from `/mnt/upan/dump/ics_decoder/`)
+
+Every RD cycle returns all-zeros:
+SEOS_READ blk7=0000000000000000 fc=0 id=0 sio_pacs= hex=0000000 SEOS_PARSE fc=0 id=0 raw= blk7=0000000000000000
+
+
+The genuine Nikola decoder detects the card (RD doesn't return `??`) but extracts NO data — blk7 is all zeros, fc=0, id=0, no SIO# field. This is a **card compatibility limitation**, not a firmware bug. The Nikola iCS Decoder only supports SE/SEOS cards; legacy iClass cards are not decodable.
+
+### Key Insight
+**The genuine reference device has the same limitation.** Our DIY decoder uses the same RP10E reader and would produce identical all-zeros output for this card type. No firmware or middleware fix can resolve a card that the RP10E + decoder firmware cannot decode.
+
+### Suggested UX Fix: All-Zeros Guard
+
+**File:** `src/lib/activity_main.py` (in the Dysonian-Lab/icopy-x fork)
+
+**Problem:** When `blk7=0000000000000000` (all zeros), the current check at line 8208:
+```python
+if blk7:  # '0000000000000000' is truthy — passes the check!
+...incorrectly treats all-zeros as valid card data, showing "Source decoded!" with FC:0, ID:0.
+
+Recommended fix: Add a guard for all-zeros blk7 to show "card unreadable" instead of proceeding to write:
+
+# Line 8206-8214 — add all-zeros guard
+if block is not None:
+    blk7 = block.get('blk7', '')
+    if blk7 and blk7 != '0000000000000000':
+        self._source_data = block
+        self._state = self.STATE_WAIT_BLANK
+        self._render_wait_blank_state()
+        self._start_target_poll()
+        return
+    # Card detected but no data extracted — likely incompatible card type
+    # Show error message and continue polling
+    self._render_card_unreadable_state()
+Suggested new render method:
+
+def _render_card_unreadable_state(self):
+    """Render 'Card unreadable' state for all-zeros card data."""
+    canvas = self.getCanvas()
+    if canvas is None:
+        return
+    self._clear_canvas()
+    self.setLeftButton(resources.get_str('back'))
+    self.setRightButton('')
+    canvas.create_text(
+        120, self._Y_STATUS,
+        text='Card unreadable',
+        fill='#8B0000',
+        font=resources.get_font(14),
+        anchor='center',
+        tags='_ics_status',
+    )
+    canvas.create_text(
+        120, self._Y_PROMPT,
+        text='Try SE/SEOS or 125kHz Prox',
+        fill='#333333',
+        font=resources.get_font(13),
+        anchor='center',
+        tags='_ics_prompt',
+    )
+Also add all-zeros detection in middleware (src/middleware/ics_decoder.py, parse_block()):
+
+# After blk7 extraction (line 208-210), add validation
+if 'blk7' not in result:
+    return None
+if result['blk7'] == '0000000000000000':
+    # Genuine decoder detected a card but couldn't decode it (likely
+    # legacy iClass or incompatible card type)
+    result['decodable'] = False
+else:
+    result['decodable'] = True
+Conclusion
+No firmware or middleware changes needed for card reading itself. The all-zeros guard is a UX improvement to avoid misleading "Source decoded!" messages for undecodable cards. 
+
+```
+---
+
+## TESTER LOG ANALYSIS — Legacy iClass Card (2026-09-16)
+
+### Card Type: iClass Legacy (NOT SEOS/SE)
+- Key set 0 = `AE A6 84 A6 DA B2 32 78` (HID iClass default public key)
+- 2 application areas (AA1 limit 18, AA2 limit 31) — standard iClass Legacy
+- "failed to communicate with card" — intermittent PM3 read, card positioning issue
+
+### Why the Nikola Decoder Returns All-Zeros
+- The iCS Decoder (genuine Nikola and DIY) is designed **ONLY** for SE/SEOS cards
+- The RP10E performs SEOS crypto internally and outputs decrypted Wiegand
+- **iClass Legacy cards do NOT produce Wiegand output** from the RP10E
+- The decoder detects card presence but extracts no data → returns all zeros
+
+### Correct Workflow for Legacy iClass Cards
+1. **Do NOT use ICS Decoder** for Legacy iClass cards
+2. **Use iCopy-X standard Read → Clone flow** (PM3 coil directly)
+3. The iCopy-X natively supports iClass Legacy via `hf iclass dump` with HID default key
+4. Write to blank iClass/Picopass via `iclasswrite.writeDataBlocks()`
+
+### Bit Count Conclusion
+**Not a bit count mismatch.** The issue is that Legacy iClass cards don't produce Wiegand output from the RP10E. The firmware's filter `(26/34/35/37/48)` would handle 34-bit if it were produced, but the RP10E doesn't output Wiegand for Legacy cards. This is a hardware/architecture limitation, not a firmware bug.
+
+---
 ## REPOS
 
 | Repo | Purpose |
 |------|---------|
-| `Dysonian-Lab/icopy-x` | Main fork with ICS Decoder (commit e70b5dd) |
+| `Dysonian-Lab/icopy-x` | Main fork with ICS Decoder |
 | `Dysonian-Lab/icopy-x-ics-decoder` | Firmware, releases |
 | `lab-401/icopy-x` | Upstream (read-only) |
 
----
+## SYNC HISTORY
+
+### 2026-10-03: Fork Synced with Upstream v4.23346
+
+**Initial state:**
+- Local `Dysonian-Lab/icopy-x` main at `7049af1` (50 commits behind both origin and upstream)
+- `origin/main` (Dysonian-Lab) at `b3809b5` (30 commits ahead of local)
+- `upstream/main` (lab-401) at `28e817f` (75 commits ahead of local, contains all origin commits)
+
+**Sync steps performed:**
+1. `git stash` — preserved uncommitted changes (iCLASS fixes)
+2. `git pull origin main --ff-only` — fast-forwarded local from `7049af1` to `b3809b5`
+3. `git merge upstream/main` — merged 45 upstream commits on top, fast-forwarding to `28e817f`
+4. `git stash pop` — restored uncommitted changes, resolved conflicts:
+   - `ipk_extract/` files: deleted by upstream, discarded stashed changes (obsolete)
+   - `plugins/manage_dictionaries/plugin.py`: merged upstream i18n plugin refactor with iCLASS dictionary support
+   - `plugins/manage_dictionaries/ui.json`: merged upstream UI refactor with iCLASS input fields
+   - `src/middleware/hficlass.py`: no conflict (stashed changes applied cleanly)
+   - `src/middleware/iclasswrite.py`: no conflict (stashed changes applied cleanly)
+5. Cleaned up `iclass_default_keys.dic` — removed duplicates and placeholder keys
+6. `git commit` — commit `91477e7` on local main
+7. `git stash drop` — discarded stash (changes fully applied)
+8. `git push origin main` — pushed to `Dysonian-Lab/icopy-x`
+
+**Final state:**
+- Local main at `91477e7`
+- Contains all upstream PRs #14-#30 (i18n, card-notes, chameleon-dump, RTC fixes, MFC recovery)
+- Contains all your iCLASS dictionary key discovery fixes
+
+**To keep in sync going forward:**
+```bash
+cd /d/kilocode/icopy-x
+git fetch upstream
+git merge upstream/main  # or git rebase upstream/main for cleaner history
+git push origin main
+```
 
 ## TOKEN LOCATION
 
 `D:\kilocode\icsdecoder\cridential.txt` line 60
+
+---
+
+## CRITICAL ISSUE - PM3 Version Shows "?" & Long Boot (2026-10-04)
+
+### Problem
+After flashing `icopy-x-ics-decoder-noflash.ipk` (v0.1.6):
+- About screen shows: HMI 1.4.1.0, OS v0.1.6, **PM: ?**
+- Long boot (2-3 min) with "Processing..." screen hanging
+- Device was previously running upstream v1.1.6 full flash IPK with PM3 v4.23346
+
+### Root Cause Analysis
+
+**No-flash IPK uses factory PM3 client** (from commit `372259e`) - this is the **old NIKOLA firmware** (v3.1 from 2022), NOT the RRG/Iceman v4.23346.
+
+The PM3 version detection in `src/middleware/version.py::getPM()` calls `pm3_flash.get_running_version()` which sends `hw version` via executor.
+
+**For NIKOLA firmware**: expects `NIKOLA: v3.1 ...` line in output
+**For RRG/Iceman**: expects `os: RRG/Iceman/master/v4.23346...` line
+
+The factory PM3 binary in the no-flash IPK **IS the NIKOLA client** (from commit `372259e`). It should return "NIKOLA: v3.1..." in `hw version` output.
+
+**Why it shows "?":**
+1. `executor.startPM3Task('hw version', timeout=5000)` returns -1 (timeout/error)
+2. Or PM3 subprocess isn't running properly on device
+3. Or TCP connection (port 8888) not established
+4. Or `hw version` command hangs on this firmware
+
+**Long "Processing..." boot:**
+The `_post_ui_pm3_check()` in `application.py` runs `hw version` with `rework_max=0` (no retries). If PM3 is slow/unresponsive, it blocks the background thread but the Toast stays visible.
+
+### Key Files
+- `src/middleware/version.py` - `getPM()` calls `pm3_flash.get_running_version()`
+- `src/middleware/pm3_flash.py` - `get_running_version()` sends `hw version` via executor
+- `src/middleware/executor.py` - `startPM3Task()` with `rework_max` retries
+- `src/main/rftask.py` - RemoteTaskManager manages PM3 subprocess on TCP:8888
+- `src/main/main.py` - Boots RTM, calls `executor.connect2PM3()` after 2s sleep
+
+### Why PM3 Binary in No-Flash IS Old NIKOLA
+- `build/factory_proxmark3` = NIKOLA client (commit `372259e`)
+- No-flash IPK excludes `res/firmware/pm3/fullimage.elf` (the RRG/Iceman firmware image)
+- Without the flash manifest, `needs_flash()` returns False, never flashes new firmware
+- The PM3 client binary runs against whatever firmware is on the device's SAMD21
+
+### If Device Was on v1.1.6 Full Flash Before
+The SAMD21 has RRG/Iceman v4.23346 firmware on it. The no-flash IPK installs the **NIKOLA client binary** which tries to talk to RRG/Iceman firmware via old Nikola protocol - **protocol mismatch**.
+
+### Fix Options
+1. **Flash full IPK** (`icopy-x-ics-decoder-flash.ipk`) - includes RRG/Iceman firmware + matching client
+2. **Use PM3 client matching device firmware** - but no-flash IPK only ships NIKOLA client
+3. **Build no-flash with RRG/Iceman client** - but would need matching Lua 5.4 scripts
+
+### Immediate Action
+Flash the **full flash IPK** (includes firmware + matching client) to restore PM3 version detection.
+
+---
+
+## FIXED: No-Flash IPK PM3 Client Mismatch (2026-10-04)
+
+### Problem
+No-flash IPK v0.1.6 (released 2026-10-03) shipped **RRG/Iceman 385d892-dirty client** (old, Lua 5.1) instead of **v4.23346 Frosty Lemon client** (Lua 5.4).
+
+Devices with v4.23346 firmware (from full flash v1.1.6) had protocol mismatch:
+- `hw version` command failed → PM version showed `"?"`
+- Long 2-3 min boot with "Processing..." (PM3 unresponsive to version probe)
+
+### Root Cause
+`tools/build_ipk.py` has two client sources for `--no-flash`:
+- `build/factory_proxmark3` = checked-in old client (385d892-dirty)
+- `build/proxmark3` = Docker build (v4.23346)
+
+Build script defaulted to factory client for no-flash.
+
+### Fix Applied
+Replaced checked-in factory binaries with upstream v1.1.6 release binaries:
+```bash
+cp official_flash_ipk/pm3/proxmark3 build/factory_proxmark3
+cp official_flash_ipk/pm3/lua.zip build/factory_lua.zip
+python tools/build_ipk.py --no-flash --version v0.1.6
+```
+
+### Result
+- **PM3 client**: RRG/Iceman **v4.23346 Frosty Lemon** (matches device firmware)
+- **Lua scripts**: **5.4** (matches v4.23346)
+- **CAPABILITIES_VERSION**: **11** (both client + firmware)
+- **version.so / install.so**: identical to upstream v1.1.6
+- **IPK size**: 13.1 MB (was 11.4 MB)
+- **SHA256**: `6ed487c5dadc2fa364721a3bbf63efd39931af88a65b4cb81f31f9ecdc3d59db`
+
+### Release Updated
+https://github.com/Dysonian-Lab/icopy-x-ics-decoder/releases/tag/v0.1.6
+- Old asset deleted, new asset uploaded
+- PM version now dynamically detected via `hw version` (no hardcoding)
+
+### Verification Pending
+Test on device: About screen should show PM `v4.23346` (not `?`), fast boot.
+
+---
+
+## FIXED: iCLASS Dictionary Folder Auto-Creation (2026-10-04)
+
+### Problem
+iCLASS dictionary folder `/mnt/upan/keys/iclass/` not created on device. Only `mf1/` and `t55xx/` existed at `H:\keys\`. User had to manually run "Load Dictionaries" from Manage Dictionaries plugin.
+
+### Root Cause
+Dictionary folders only created when user manually runs "Load Dictionaries" plugin action. No auto-creation on boot/mount.
+
+### Fix Applied
+Added `_ensure_dictionary_dirs()` in `src/middleware/gadget_linux.py` called from `auto_ms_remount()` which runs:
+1. On boot (main.py calls `gadget_linux.auto_ms_remount()`)
+2. After PC-mode exit (`kill_all_module` calls it with `auto_remount=True`)
+
+```python
+def _ensure_dictionary_dirs():
+    base = '/mnt/upan/keys'
+    for sub in ('mf1', 't55xx', 'iclass'):
+        os.makedirs(os.path.join(base, sub), exist_ok=True)
+```
+
+### Result
+- `H:\keys\iclass\` folder auto-created on boot/mount
+- Manage Dictionaries plugin "Load Dictionaries" still works for copying default keys
+- iCLASS keys available immediately for `hficlass.py` dictionary fallback
+
+### IPK Updated
+- Release v0.1.6 asset replaced (SHA256: `0bd94806...`)
+- Device H: updated with new IPK
+
+---
+
+## FIXED: iCLASS Dictionary Auto-Copy (2026-10-04)
+
+### Problem
+Dictionary folder created but empty — default `iclass_default_keys.dic` not copied. User still had to manually run "Load Dictionaries".
+
+### Fix Applied
+Extended `_ensure_dictionary_dirs()` in `src/middleware/gadget_linux.py` to also copy default dictionary files from plugin bundle if destination doesn't exist:
+
+```python
+dicts = {
+    'mf1': ('mfc_default_keys.dic', 'mfc_default_keys.dic'),
+    't55xx': ('t55xx_default_pwds.dic', 't55xx_default_pwds.dic'),
+    'iclass': ('iclass_default_keys.dic', 'iclass_default_keys.dic'),
+}
+
+for sub, (src_name, dst_name) in dicts.items():
+    # ... create directory ...
+    dst_file = os.path.join(path, dst_name)
+    if not os.path.isfile(dst_file):
+        src_file = os.path.join(plugin_base, sub, src_name)
+        if os.path.isfile(src_file):
+            shutil.copy(src_file, dst_file)
+```
+
+### Result
+- On boot/mount: all three dictionary folders created + default keys copied
+- `H:\keys\iclass\iclass_default_keys.dic` now populated immediately
+- iCLASS dictionary fallback in `hficlass.py` works without manual steps
+
+### IPK Updated
+- Release v0.1.6 asset replaced (SHA256: `32ffc30b...`)
+- Device H: updated with new IPK
+
+---
+
+## FIXED: iCLASS Dictionary Auto-Copy (2026-10-04)
+
+### Problem
+Dictionary folder created but empty — default `iclass_default_keys.dic` not copied. User still had to manually run "Load Dictionaries".
+
+### Fix Applied
+Extended `_ensure_dictionary_dirs()` in `src/middleware/gadget_linux.py` to also copy default dictionary files from plugin bundle if destination doesn't exist:
+
+```python
+dicts = {
+    'mf1': ('mfc_default_keys.dic', 'mfc_default_keys.dic'),
+    't55xx': ('t55xx_default_pwds.dic', 't55xx_default_pwds.dic'),
+    'iclass': ('iclass_default_keys.dic', 'iclass_default_keys.dic'),
+}
+
+for sub, (src_name, dst_name) in dicts.items():
+    # ... create directory ...
+    dst_file = os.path.join(path, dst_name)
+    if not os.path.isfile(dst_file):
+        src_file = os.path.join(plugin_base, sub, src_name)
+        if os.path.isfile(src_file):
+            shutil.copy(src_file, dst_file)
+```
+
+### Result
+- On boot/mount: all three dictionary folders created + default keys copied
+- `H:\keys\iclass\iclass_default_keys.dic` now populated immediately
+- iCLASS dictionary fallback in `hficlass.py` works without manual steps
+
+### IPK Updated
+- Release v0.1.6 asset replaced (SHA256: `32ffc30b...`)
+- Device H: updated with new IPK
+
+## Verified Working (2026-10-04)
+- Logging: ICS decoder logs -> /mnt/upan/dump/ics_decoder/ (numbered 001.log, 002.log...), main app logs -> /mnt/upan/logs/ (numbered 001.log, 002.log...). Both visible in PC-Mode.
+- SEOS downgrade workflow verified end-to-end:
+  - Read SEOS card via ICS decoder: FC#:100 ID#:612 blk7#:0000000002c804c9
+  - Write to T5577 blank: success
+  - Verify T5577: FC:100 CN:612 parity (ok)
+  - Autocopy T5577->T5577: verify passed
+- About screen: OS version 0.1.6 reported correctly, PM version no longer shows ?
+
+## Known Issues (need investigation)
+- PC mode exit hang observed in app log
+- 56-bit card capture from Canadian tester not yet analyzed/implemented
+
+## V0.1.6.2 � LF VERIFY ARCHITECTURE FIX (2026-10-10)
+
+### Problem
+After a successful LF T5577 write with inline verification, `_do_verify_bg()` called
+HF-only `detect_target()`. On an LF card (T5577), it returns `None`, producing
+"No card on coil" and overwriting the successful write result. Boolean flags
+(`_lf_verify_done`, `_last_written_target`) failed because the background polling
+timer (`_poll_target` ? `_bg_detect`) continuously runs `detect_target()`,
+overwriting `self._target_type = None` before `_do_verify_bg()` executes.
+
+### Fix (in `activity_main.py` only, `ics_decoder.py` untouched)
+
+**1. Credential-type-based protocol dispatch in `_do_verify_bg()`**
+- Check `is_valid_26bit(fc, cid)` from `self._source_data` FIRST.
+- If 26-bit: attempt LF verification directly via
+  `verify_target_card(TARGET_LF_T5577, source)`. If success ? report True.
+  Only if LF fails ? fall back to HF `detect_target()`.
+- If not 26-bit: use existing HF-only `detect_target()`.
+
+**2. Timer pollution prevention**
+- `_do_verify()`: sets `_abort_target_poll = True`, calls `_stop_poll()` +
+  `_stop_target_poll()` before launching background verify.
+- `_do_write()`: sets `_abort_target_poll = True` before stopping timers.
+- `_on_target_detected()`: refuses to overwrite `_target_type` when state
+  is not `STATE_WAIT_BLANK` (prevents stale timer callbacks from clobbering
+  post-write state).
+
+**3. No state flags** � eliminated `_lf_verify_done` and `_last_written_target`.
+Protocol dispatch is driven by credential type, not fragile boolean state.
+
+### Verification
+- Hardware log `027.log`: `VERIFY_RESULT: success=True msg=FC:100 CN:613`
+- Golden snapshot: `release/GOLDEN-v0.1.6.2-verified-lf-clone/` + `CHECKSUMS.sha256`
+- Release asset: `icopy-x-ics-decoder-v0.1.6.2-debug.ipk` (SHA256:
+  `2db557dadae6de3ca64fc1aed98255abba72db910d3819a656f49bc75646fa12`)
+
+### Operational Rules
+- **Rule A**: `ics_decoder.py` is locked � PM3 wrapper logic is verified.
+- **Rule B**: Future feature audits use Two-Phase: Phase 1 = audit/logging
+  only (zero logic changes); Phase 2 = architectural proposal before
+  implementation.
+- **Rule C**: If any future change regresses, revert to
+  `release/GOLDEN-v0.1.6.2-verified-lf-clone/`.
+
+## Lessons Learned
+- Do NOT change working code paths (ics_decoder logging was working � replaced 2026-10-07 per strict constraints: removed ismount/fsync, set log dir to `/mnt/upan/dump/ics_decoder/`)
+- Do NOT touch historical docs/CI unless explicitly asked
+- Minimal changes only � no broad refactors
+- Verify IPK contents before uploading
+- Do not add commentary to user statements
