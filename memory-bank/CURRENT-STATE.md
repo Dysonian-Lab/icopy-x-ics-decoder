@@ -781,3 +781,103 @@ Protocol dispatch is driven by credential type, not fragile boolean state.
 - Minimal changes only — no broad refactors
 - Verify IPK contents before uploading
 - Do not add commentary to user statements
+
+## V0.1.6.3 — PROXMARK3 v4.23346 COMPATIBILITY AUDIT (2026-10-11)
+
+### Summary
+
+Release v0.1.6.3 delivers empirical validation of all AutoCopy PM3 CLI command
+dispatches against the upstream Proxmark3 v4.23346 (Iceman / Frosty Lemon)
+source tree (git commit `fc024c803`).
+
+### Deliverables
+
+- **Commit:** `2536dd2` — pushed to `main`
+- **Tag:** `v0.1.6.3` (annotated) — pushed to remote
+- **GitHub Release:** Published at https://github.com/Dysonian-Lab/icopy-x-ics-decoder/releases/tag/v0.1.6.3
+- **Audit script:** `scripts/audit_pm3_cli.py` — AST-based static analysis
+- **Compliance matrix:** `docs/PM3_V4.23346_COMPLIANCE_MATRIX.md`
+
+### Verification Results
+
+- **47 dispatch points audited** (all via direct `executor.startPM3Task`; 0 routed through pm3_compat)
+- **32 unique command templates extracted and verified** against PM3 v4.23346 `CLIParserInit` + `argtable` source definitions
+- **32/32 commands: FULL MATCH** — 0 mismatches, 0 deprecated flags, 0 missing parameters
+- All command dispatches use Iceman POSIX-compliant CLI syntax natively
+- Zero runtime middleware dependency between AutoCopy and PM3 client
+
+### Commands by Category
+
+| Category | Card Types | Dispatch Points |
+|----------|-----------|-----------------|
+| LF Clone Writes & Verifications | EM410x, HID, Indala, FDX-B, KERI, NEDAP, T5577, EM4x05, Hitag2/Paxton | 21 |
+| HF Mifare Classic | Gen1a (csetuid, cload, wrbl, cgetblk) + Gen2 detection | 14 |
+| HF Ultralight / NTAG | MFU restore/info (EV1, NTAG213/215/216, Magic UL) | 3 |
+| LF Hitag2 / Paxton | Paxton blocks, Hitag2 authenticated ops | 4 |
+| HF iCLASS & ISO15693 | calcnewkey, wrbl, rdbl | 5 |
+
+### Flag Verification (User Directives)
+
+- **`lf sea` and `hf sea`** are valid CLI prefix-match aliases for `lf search` / `hf search` — NOT flagged as compliance issues
+- **`-k`** is valid as `--key` on `hf iclass`, `hf mf`, `lf hitag`, `hf mfu` — NOT flagged as `--keep`
+- **`-p`** maps to `--pwd` on `lf t55xx write`, `lf hitag wrbl`, `lf em 4x05 write`
+- **`--blk`** maps to `arg_int1(NULL, "blk", ...)` on `hf mf wrbl`, `hf mf cgetblk`, `hf iclass wrbl`, `hf iclass rdbl`
+- **`-r` / `--raw`** used across all LF clone variants (HID, Indala, SecuraKey, Gallagher, Paradox, Nexwatch)
+
+### Working Tree Status
+
+- `main` branch is clean and stable
+- Working tree contains untracked scratch files (build scripts, release payloads) — these are local dev artifacts, not committed
+
+## FIRMWARE RESEARCH: ARBITRARY WIEGAND BIT FORMATS
+
+### Location
+
+`firmware/ics-decoder/ics-decoder.ino` — line 119
+
+### Current Constraint
+
+```c
+if (cardAvailable && (cardBits == 26 || cardBits == 34 || cardBits == 35 || cardBits == 37 || cardBits == 48)) {
+```
+
+### Identified Limitation
+
+The hardcoded whitelist blocks valid real-world credentials that do not match
+the listed bit widths from passing through to the host (`ics_decoder.py`):
+
+- **56-bit PIV** (PIV-II proximity cards / enterprise credentials)
+- **32-bit CSN** (some HID corporate formats)
+- **Custom enterprise bit formats** (33-bit, 40-bit, etc.)
+- Any non-standard but legitimate Wiegand frame that doesn't match the exact whitelist
+
+### Proposed Future Solution
+
+Replace the whitelist with a noise-floor threshold:
+
+```c
+if (cardAvailable && cardBits >= 4 && cardBits <= 64) {
+```
+
+This would:
+1. **Allow raw frame passthrough** — `Hex#`, `Bit#`, and `Blk7#` fields are already
+   format-agnostic and forward regardless of bit count
+2. **Filter line noise** — a floor of 4 bits rejects spurious 1-3 bit captures from
+   line noise or brief contact
+3. **Cap at 64 bits** — matches the `uint64_t` capacity for `cardRaw`
+
+### Action Policy
+
+- **DO NOT touch firmware on `main`** — the Wiegand whitelist is intentionally
+  conservative and working correctly for the intended 26/34/35/37/48-bit formats
+- **Deferred** until dedicated bench test hardware is set up (secondary SparkFun
+  board + RP10 reader)
+- **All experimentation** must occur in an isolated feature branch:
+  `feature/arbitrary-wiegand-bits`
+- **Verification requirement:** Logic analyzer verification required before any
+  merge — must observe real 56-bit PIV and custom format captures on the wire
+  to confirm the noise floor threshold behaves correctly
+
+---
+
+## Lessons Learned
