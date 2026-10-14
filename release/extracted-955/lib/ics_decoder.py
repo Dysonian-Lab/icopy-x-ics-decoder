@@ -355,7 +355,7 @@ def extract_and_shift_wiegand(payload_bytes: bytes, bit_length=None) -> dict:
     Returns:
         Dict with keys: valid, fc, cn, shifted_hex
     """
-    if bit_length != 26:
+    if bit_length is not None and bit_length != 26:
         return {"valid": False}
     data = payload_bytes
 
@@ -412,7 +412,7 @@ def parse_sio_pacs(hex_string, bit_length=None):
     Returns:
         Dict with keys: fc, cn, raw_26bit, valid
     """
-    if not hex_string or bit_length != 26:
+    if not hex_string or (bit_length is not None and bit_length != 26):
         return {"fc": 0, "cn": 0, "raw_26bit": "0", "valid": False}
 
     try:
@@ -457,7 +457,7 @@ def parse_sio_container(hex_string, bit_length=None):
     Returns:
         Dict with keys: fc, cn, raw_26bit, valid
     """
-    if not hex_string or bit_length != 26:
+    if not hex_string or (bit_length is not None and bit_length != 26):
         return {"fc": 0, "cn": 0, "raw_26bit": "0", "valid": False}
 
     try:
