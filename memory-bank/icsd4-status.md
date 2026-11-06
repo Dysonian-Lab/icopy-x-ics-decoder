@@ -35,7 +35,7 @@
 - Gap-timeout frame latching (default 25 ms, clamp 5..100 ms)
 - `wgReconstruct64()` rebuilds uint64_t from bits[] matching production ISR packing
 - `extract_field()` extracts arbitrary bit ranges from reconstructed values
-- `cmdBrute()` brute-forces FC/CN field positions on captured frames
+- `cmdBrute()` brute-forces FC/CN field positions on captured frames (FC8, CN16/20/24/32/34/36)
 - `printUint64Dec()` custom 64-bit decimal printer for AVR (Serial.println doesn't support uint64_t decimal)
 
 ### 56-bit Avigilon legacy payload (SE 2k via SAM)

@@ -778,6 +778,36 @@ void cmdBrute() {
         printUint64Dec(v);
     }
 
+    // --- CN candidates: 32-bit fields --------------------------------------
+    Serial.println(F("CN32 (start=value):"));
+    for (int s = 0; s + 32 <= (int)bits; s++) {
+        uint64_t v = extract_field(raw, bits, s, 32);
+        Serial.print(F("  "));
+        Serial.print(s);
+        Serial.print(F("="));
+        printUint64Dec(v);
+    }
+
+    // --- CN candidates: 34-bit fields --------------------------------------
+    Serial.println(F("CN34 (start=value):"));
+    for (int s = 0; s + 34 <= (int)bits; s++) {
+        uint64_t v = extract_field(raw, bits, s, 34);
+        Serial.print(F("  "));
+        Serial.print(s);
+        Serial.print(F("="));
+        printUint64Dec(v);
+    }
+
+    // --- CN candidates: 36-bit fields --------------------------------------
+    Serial.println(F("CN36 (start=value):"));
+    for (int s = 0; s + 36 <= (int)bits; s++) {
+        uint64_t v = extract_field(raw, bits, s, 36);
+        Serial.print(F("  "));
+        Serial.print(s);
+        Serial.print(F("="));
+        printUint64Dec(v);
+    }
+
     Serial.print(F("BRUTE done\r\n"));
 }
 

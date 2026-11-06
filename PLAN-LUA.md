@@ -122,7 +122,7 @@ The iCS D4 responds with one or more lines, each terminated with `\r\n`. Some co
 | `MODE` | `BRIDGE` or `SNIFF` | `MODE BRIDGE` or `MODE SNIFF` or `??` | `set_mode(mode)` |
 | `TIMEOUT` | `ms` (5-100) | `TIMEOUT#:N` or `??` | `set_timeout(ms)` |
 | `BITS` | none | `BITS#:N` | `get_live_bits()` |
-| `BRUTE` | none | `BRUTE - Frame N bits=M` + bit map + FC8/CN16/CN20/CN24 lists + `BRUTE done` | `brute_force()` |
+| `BRUTE` | none | `BRUTE - Frame N bits=M` + bit map + FC8/CN16/CN20/CN24/CN32/CN34/CN36 lists + `BRUTE done` | `brute_force()` |
 | `HELP` / `/?` | none | Command list with descriptions | `get_help()` |
 
 ---
@@ -175,8 +175,14 @@ local brute_result = {
   cn16 = { {start=number, value=number}, ... },  -- all 16-bit CN candidates
   cn20 = { {start=number, value=number}, ... },  -- all 20-bit CN candidates
   cn24 = { {start=number, value=number}, ... },  -- all 24-bit CN candidates
+  cn32 = { {start=number, value=number}, ... },  -- all 32-bit CN candidates
+  cn34 = { {start=number, value=number}, ... },  -- all 34-bit CN candidates
+  cn36 = { {start=number, value=number}, ... },  -- all 36-bit CN candidates
 }
 ```
+
+The `cn34` list is critical for the 56-bit Avigilon format (34-bit card number).
+Without it, card numbers above 16.7 million would be invisible to BRUTE.
 
 ---
 
@@ -238,7 +244,10 @@ Send `BRUTE\n`. Parse the full multi-line output:
 5. `CN16 (start=value):` section
 6. `CN20 (start=value):` section
 7. `CN24 (start=value):` section
-8. `BRUTE done` line
+8. `CN32 (start=value):` section
+9. `CN34 (start=value):` section
+10. `CN36 (start=value):` section
+11. `BRUTE done` line
 
 Returns brute_result table or `nil` if `NO FRAMES`.
 
@@ -316,7 +325,7 @@ BRUTE - Frame 0 bits=56
 | Output text area | Scrollable log of all serial traffic |
 | Frame table view | Parsed frame fields (bit count, hex, guess, etc.) |
 | Card block view | Parsed card fields (FC#, ID#, Hex#, Blk7#) |
-| Brute results view | Table of FC8/CN16/CN20/CN24 candidates |
+| Brute results view | Table of FC8/CN16/CN20/CN24/CN32/CN34/CN36 candidates |
 | Target match inputs | Text boxes for expected FC and CN values |
 | Match button | Run `auto_brute_and_match()` |
 
@@ -483,7 +492,7 @@ Before handoff is considered complete, verify:
 
 1. **RD clears card state:** After a successful `read_card()`, the iCS D4 clears `cardAvailable`. The card must be re-presented for the next `read_card()` call.
 2. **56-bit truncation in Blk7:** `Blk7#` is always 16 hex chars (64 bits). For 56-bit cards, `Blk7#` contains only the low 64 bits. Use `Hex#` for full 56-bit data.
-3. **Brute-force candidate lists grow with bit count:** For 256-bit frames, `FC8` has 249 entries, `CN24` has 233 entries. Output may be long; consider pagination in GUI.
+3. **Brute-force candidate lists grow with bit count:** For 256-bit frames, `FC8` has 249 entries, `CN36` has 221 entries. Output may be long; consider pagination in GUI.
 4. **No automatic format detection:** The script does not guess which FC/CN candidate is correct. The engineer must use `auto_brute_and_match()` with known card markings or manually inspect `BRUTE` output.
 5. **Serial port exclusivity:** Only one process can hold the serial port at a time. Close Arduino Serial Monitor before running the script.
 
