@@ -43,11 +43,15 @@ Formats not listed return `FC#:0 ID#:0` but still return `OK` with the raw `Hex#
 
 | Component | Details |
 |-----------|---------|
-| MCU | SparkFun Qwiic Pro Micro USB-C (ATmega32U4) **5V / 16MHz** |
+| MCU | ATmega32U4 **5V / 16MHz** (SparkFun Qwiic Pro Micro USB-C or Arduino Leonardo) |
+| Connection | USB-C native — no hardware modification required |
 | RFID Reader | HID multiCLASS SE RP10 / RP40 |
-| Connection | USB-C to iCopy-X |
 
-> **Board Selection:** Arduino IDE → Tools → Board → SparkFun AVR Boards → SparkFun Qwiic Pro Micro (ATmega32U4). Amazon clone Pro Micros are known to be difficult or impossible to flash — use an official SparkFun Qwiic Pro Micro USB-C.
+### Board Selection in Arduino IDE
+
+**Tools → Board → SparkFun AVR Boards → SparkFun Qwiic Pro Micro (ATmega32U4)**
+
+Or **Arduino Leonardo** (same ATmega32U4 core). The SparkFun Qwiic Pro Micro USB-C is the recommended form factor because it has native USB-C, but any ATmega32U4 5V/16MHz board will work. Amazon clone Pro Micros are known to be difficult or impossible to flash due to different bootloaders and USB-to-serial chips — use an official SparkFun Qwiic Pro Micro USB-C or Arduino Leonardo.
 
 ### Wiring
 

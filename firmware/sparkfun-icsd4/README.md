@@ -1,6 +1,6 @@
-# SparkFun iCS D4 — Diagnostic Sniffer & iCS Decoder Accessory
+# iCS D4 — Diagnostic Sniffer & iCS Decoder Accessory (ATmega32U4)
 
-Firmware for the SparkFun Qwiic Pro Micro USB-C (ATmega32U4) that serves a dual role:
+Firmware for ATmega32U4 boards (SparkFun Qwiic Pro Micro USB-C or Arduino Leonardo) that serves a dual role:
 
 1. **Primary**: iCS Decoder accessory for the iCopy-X — responds to `Who` → `ISE` and `RD` → `OK` + card block, maintaining 100% reverse compatibility with the production `icsdecooderori.ino` handshake. **Does not touch the iCopy-X no-flash firmware.**
 
@@ -38,7 +38,7 @@ Formats not listed return `FC#:0 ID#:0` but still return `OK` with the raw `Hex#
 
 | Component | Details |
 |-----------|---------|
-| MCU | SparkFun Qwiic Pro Micro USB-C (ATmega32U4) **5V / 16MHz** |
+| MCU | ATmega32U4 **5V / 16MHz** (SparkFun Qwiic Pro Micro USB-C or Arduino Leonardo) |
 | Connection | USB-C native — no hardware modification required |
 | RFID Reader | HID multiCLASS SE RP10 / RP40 |
 
@@ -46,7 +46,7 @@ Formats not listed return `FC#:0 ID#:0` but still return `OK` with the raw `Hex#
 
 **Tools → Board → SparkFun AVR Boards → SparkFun Qwiic Pro Micro (ATmega32U4)**
 
-This is the **official SparkFun board**. Amazon clone Pro Micros (especially USB-C variants) are known to be difficult or impossible to flash due to different bootloaders and USB-to-serial chips. If you have a clone that won't flash, use an official SparkFun Qwiic Pro Micro USB-C.
+Or **Arduino Leonardo** (same ATmega32U4 core). The SparkFun Qwiic Pro Micro USB-C is the recommended form factor because it has native USB-C, but any ATmega32U4 5V/16MHz board will work. Amazon clone Pro Micros are known to be difficult or impossible to flash due to different bootloaders and USB-to-serial chips — use an official SparkFun Qwiic Pro Micro USB-C or Arduino Leonardo.
 
 ### Wiring
 
