@@ -705,11 +705,11 @@ uint64_t extract_field(uint64_t value, uint16_t total_bits, int start, int len) 
 }
 
 // cmdBrute — Brute-force FC/CN field positions on the most recent captured
-// frame. Tries every 8-bit FC position and every 16-bit CN position, printing
-// the decoded decimal values. Look for known values (e.g. card number
+// frame. Tries FC8/FC16/FC20/FC22 and CN16/CN20/CN24/CN32/CN34/CN36 fields,
+// printing decoded decimal values. Look for known values (e.g. card number
 // 2493837 from card markings) in the output to identify the correct layout.
-//
-// Usage: BRUTE
+// Useful for reverse-engineering proprietary high-bit-count formats where
+// FC/CN values exceed 8-bit or 24-bit ranges.
 void cmdBrute() {
     if (ringCount == 0) {
         Serial.print(F("NO FRAMES\r\n"));
@@ -742,6 +742,36 @@ void cmdBrute() {
     Serial.println(F("FC8 (start=value):"));
     for (int s = 0; s + 8 <= (int)bits; s++) {
         uint64_t v = extract_field(raw, bits, s, 8);
+        Serial.print(F("  "));
+        Serial.print(s);
+        Serial.print(F("="));
+        printUint64Dec(v);
+    }
+
+    // --- FC candidates: 16-bit fields --------------------------------------
+    Serial.println(F("FC16 (start=value):"));
+    for (int s = 0; s + 16 <= (int)bits; s++) {
+        uint64_t v = extract_field(raw, bits, s, 16);
+        Serial.print(F("  "));
+        Serial.print(s);
+        Serial.print(F("="));
+        printUint64Dec(v);
+    }
+
+    // --- FC candidates: 20-bit fields --------------------------------------
+    Serial.println(F("FC20 (start=value):"));
+    for (int s = 0; s + 20 <= (int)bits; s++) {
+        uint64_t v = extract_field(raw, bits, s, 20);
+        Serial.print(F("  "));
+        Serial.print(s);
+        Serial.print(F("="));
+        printUint64Dec(v);
+    }
+
+    // --- FC candidates: 22-bit fields --------------------------------------
+    Serial.println(F("FC22 (start=value):"));
+    for (int s = 0; s + 22 <= (int)bits; s++) {
+        uint64_t v = extract_field(raw, bits, s, 22);
         Serial.print(F("  "));
         Serial.print(s);
         Serial.print(F("="));
