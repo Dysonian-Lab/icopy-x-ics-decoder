@@ -36,17 +36,28 @@ Formats not listed return `FC#:0 ID#:0` but still return `OK` with the raw `Hex#
 
 ## Hardware
 
-| Component | Connection |
-|-----------|------------|
-| MCU | SparkFun Qwiic Pro Micro USB-C (ATmega32U4) 5V/16MHz |
+| Component | Details |
+|-----------|---------|
+| MCU | SparkFun Qwiic Pro Micro USB-C (ATmega32U4) **5V / 16MHz** |
+| Connection | USB-C native — no hardware modification required |
 | RFID Reader | HID multiCLASS SE RP10 / RP40 |
-| RP10 Red → | Pro Micro VCC (+5V) |
-| RP10 Black → | Pro Micro GND |
-| RP10 Green → | Pro Micro Pin 2 (Wiegand D0, INT0) |
-| RP10 White → | Pro Micro Pin 3 (Wiegand D1, INT1) |
-| LED | Pro Micro Pin 13 (onboard LED; blinks once per latched frame) |
 
-Keep D0/D1 leads short (<15 cm) to preserve Wiegand timing integrity.
+### Board Selection in Arduino IDE
+
+**Tools → Board → SparkFun AVR Boards → SparkFun Qwiic Pro Micro (ATmega32U4)**
+
+This is the **official SparkFun board**. Amazon clone Pro Micros (especially USB-C variants) are known to be difficult or impossible to flash due to different bootloaders and USB-to-serial chips. If you have a clone that won't flash, use an official SparkFun Qwiic Pro Micro USB-C.
+
+### Wiring
+
+| Pro Micro Pin | RP10 Wire | Function |
+|---------------|-----------|----------|
+| VCC | Red | +5V power to reader |
+| GND | Black | Common ground |
+| Pin 2 (D0, INT0) | Green | Wiegand D0 |
+| Pin 3 (D1, INT1) | White | Wiegand D1 |
+
+Keep D0/D1 leads short (<15 cm) to preserve Wiegand timing integrity. The RP10 draws ~75 mA standby, ~100 mA peak.
 
 ## Flashing
 
